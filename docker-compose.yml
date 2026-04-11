@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-mishelanu}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mishelanu}
+      POSTGRES_DB: ${DB_NAME:-mishelanu}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mishelanu}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-mishelanu}:${DB_PASSWORD:-mishelanu}@postgres:5432/${DB_NAME:-mishelanu}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      SESSION_SECRET: ${SESSION_SECRET:-changeme-random-string}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./server/src:/app/server/src:ro
+      - ./client/src:/app/client-src:ro
+
+volumes:
+  pgdata:
