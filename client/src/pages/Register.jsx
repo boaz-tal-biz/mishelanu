@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../hooks/useApi.js';
 
 export default function Register() {
@@ -13,22 +13,44 @@ export default function Register() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [catSearch, setCatSearch] = useState('');
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const catRef = useRef(null);
 
   useEffect(() => {
     api.get('/categories').then(setCategories).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (catRef.current && !catRef.current.contains(e.target)) {
+        setCatDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const allSubcats = Object.entries(categories).flatMap(([cat, subs]) =>
     subs.map(s => `${cat}: ${s.subcategory}`)
   );
 
-  function toggleCategory(cat) {
-    setForm(f => ({
-      ...f,
-      service_categories: f.service_categories.includes(cat)
-        ? f.service_categories.filter(c => c !== cat)
-        : [...f.service_categories, cat]
-    }));
+  const filteredCats = catSearch.trim()
+    ? allSubcats.filter(c => c.toLowerCase().includes(catSearch.toLowerCase()))
+    : [];
+
+  const showOther = catSearch.trim() && filteredCats.length === 0;
+
+  function addCategory(cat) {
+    if (!form.service_categories.includes(cat)) {
+      setForm(f => ({ ...f, service_categories: [...f.service_categories, cat] }));
+    }
+    setCatSearch('');
+    setCatDropdownOpen(false);
+  }
+
+  function removeCategory(cat) {
+    setForm(f => ({ ...f, service_categories: f.service_categories.filter(c => c !== cat) }));
   }
 
   async function handleSubmit(e) {
@@ -122,19 +144,20 @@ export default function Register() {
         </div>
 
         <div className="form-group">
-          <label>Mobile phone *</label>
-          <input required type="tel" value={form.mobile_phone} onChange={e => setForm(f => ({ ...f, mobile_phone: e.target.value }))} />
-        </div>
-
-        <div className="form-group">
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input type="checkbox" checked={form.whatsapp_same} onChange={e => setForm(f => ({ ...f, whatsapp_same: e.target.checked }))} />
-            WhatsApp number is the same as mobile
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Mobile phone *</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', fontWeight: 400, color: 'var(--gray-500)', cursor: 'pointer', margin: 0 }}>
+              <input type="checkbox" checked={form.whatsapp_same}
+                onChange={e => setForm(f => ({ ...f, whatsapp_same: e.target.checked }))}
+                style={{ margin: 0 }} />
+              WhatsApp number is the same as mobile
+            </label>
           </label>
+          <input required type="tel" value={form.mobile_phone} onChange={e => setForm(f => ({ ...f, mobile_phone: e.target.value }))} />
           {!form.whatsapp_same && (
-            <input type="tel" placeholder="WhatsApp number" className="mt-1"
+            <input type="tel" placeholder="WhatsApp number"
               value={form.whatsapp_number} onChange={e => setForm(f => ({ ...f, whatsapp_number: e.target.value }))}
-              style={{ width: '100%', padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: '8px' }} />
+              style={{ width: '100%', padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: '8px', marginTop: '0.5rem' }} />
           )}
         </div>
 
@@ -148,25 +171,99 @@ export default function Register() {
           <input required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
         </div>
 
-        <div className="form-group">
+        <div className="form-group" ref={catRef}>
           <label>Service categories</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginTop: '0.375rem' }}>
-            {allSubcats.map(cat => (
-              <button type="button" key={cat} onClick={() => toggleCategory(cat)}
-                style={{
-                  padding: '0.375rem 0.75rem', borderRadius: '100px', fontSize: '0.8125rem',
-                  border: form.service_categories.includes(cat) ? '1.5px solid var(--teal)' : '1.5px solid var(--gray-200)',
-                  background: form.service_categories.includes(cat) ? 'rgba(62,184,164,0.1)' : 'var(--white)',
-                  color: form.service_categories.includes(cat) ? 'var(--teal)' : 'var(--gray-700)',
-                  cursor: 'pointer',
+
+          {/* Selected categories as chips */}
+          {form.service_categories.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '0.5rem' }}>
+              {form.service_categories.map(cat => (
+                <span key={cat} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+                  padding: '0.25rem 0.625rem', borderRadius: '100px', fontSize: '0.8125rem',
+                  background: 'rgba(62,184,164,0.1)', border: '1.5px solid var(--teal)', color: 'var(--teal)',
                 }}>
-                {cat}
-              </button>
-            ))}
+                  {cat}
+                  <button type="button" onClick={() => removeCategory(cat)}
+                    style={{ background: 'none', border: 'none', color: 'var(--teal)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: 0 }}>
+                    &times;
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Search input */}
+          <div style={{ position: 'relative' }}>
+            <input
+              placeholder="Start typing to search categories..."
+              value={catSearch}
+              onChange={e => { setCatSearch(e.target.value); setCatDropdownOpen(true); }}
+              onFocus={() => { if (catSearch.trim()) setCatDropdownOpen(true); }}
+            />
+
+            {/* Dropdown */}
+            {catDropdownOpen && catSearch.trim() && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                background: 'var(--white)', border: '1.5px solid var(--gray-200)', borderRadius: '8px',
+                marginTop: '0.25rem', maxHeight: '200px', overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              }}>
+                {filteredCats.filter(c => !form.service_categories.includes(c)).map(cat => (
+                  <button type="button" key={cat} onClick={() => addCategory(cat)}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '0.5rem 0.75rem', border: 'none', background: 'none',
+                      fontSize: '0.875rem', cursor: 'pointer', color: 'var(--gray-700)',
+                    }}
+                    onMouseEnter={e => e.target.style.background = 'var(--gray-100)'}
+                    onMouseLeave={e => e.target.style.background = 'none'}>
+                    {cat}
+                  </button>
+                ))}
+                {showOther && (
+                  <button type="button"
+                    onClick={() => {
+                      setForm(f => ({ ...f, other_category: catSearch.trim() }));
+                      setCatSearch('');
+                      setCatDropdownOpen(false);
+                    }}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '0.5rem 0.75rem', border: 'none', background: 'none',
+                      fontSize: '0.875rem', cursor: 'pointer', color: 'var(--coral)', fontWeight: 500,
+                    }}
+                    onMouseEnter={e => e.target.style.background = 'var(--gray-100)'}
+                    onMouseLeave={e => e.target.style.background = 'none'}>
+                    Other: "{catSearch.trim()}" — specify your service
+                  </button>
+                )}
+                {filteredCats.length > 0 && filteredCats.every(c => form.service_categories.includes(c)) && (
+                  <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
+                    All matching categories already selected
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <input placeholder="Other — specify your service" className="mt-1"
-            value={form.other_category} onChange={e => setForm(f => ({ ...f, other_category: e.target.value }))}
-            style={{ width: '100%', padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: '8px', marginTop: '0.5rem' }} />
+
+          {/* Show "Other" if manually set */}
+          {form.other_category && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginTop: '0.5rem' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+                padding: '0.25rem 0.625rem', borderRadius: '100px', fontSize: '0.8125rem',
+                background: 'rgba(232,90,79,0.08)', border: '1.5px solid var(--coral)', color: 'var(--coral)',
+              }}>
+                Other: {form.other_category}
+                <button type="button" onClick={() => setForm(f => ({ ...f, other_category: '' }))}
+                  style={{ background: 'none', border: 'none', color: 'var(--coral)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: 0 }}>
+                  &times;
+                </button>
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="form-group">

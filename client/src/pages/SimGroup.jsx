@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
+import SimNav from '../components/SimNav.jsx';
 
 export default function SimGroup() {
   const [messages, setMessages] = useState([]);
@@ -15,13 +15,8 @@ export default function SimGroup() {
 
   return (
     <div className="container" style={{ maxWidth: '480px' }}>
-      {/* Sim nav */}
-      <div className="flex gap-1 mb-2" style={{ fontSize: '0.8125rem' }}>
-        <Link to="/sim/group" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>Group</Link>
-        <Link to="/monitor" className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>Monitor</Link>
-      </div>
+      <SimNav />
 
-      {/* WhatsApp-style header */}
       <div style={{
         background: '#075e54', color: 'white', padding: '0.75rem 1rem',
         borderRadius: '12px 12px 0 0', fontWeight: 500,
@@ -30,7 +25,6 @@ export default function SimGroup() {
         <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{messages.length} messages</div>
       </div>
 
-      {/* Messages */}
       <div style={{
         background: '#e5ddd5',
         backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h100v100H0z\' fill=\'none\'/%3E%3Cpath d=\'M20 20h2v2h-2zM60 40h2v2h-2zM40 70h2v2h-2zM80 80h2v2h-2z\' fill=\'%23d4ccb7\' opacity=\'.3\'/%3E%3C/svg%3E")',
@@ -47,7 +41,6 @@ export default function SimGroup() {
             marginBottom: '0.375rem',
             maxWidth: '85%',
             boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
-            position: 'relative',
           }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: colorForName(msg.sender), marginBottom: '0.125rem' }}>
               {msg.sender}

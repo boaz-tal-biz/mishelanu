@@ -1,17 +1,24 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
+import SimNav from '../components/SimNav.jsx';
 
 export default function SimProvider() {
   const { phone } = useParams();
   const [messages, setMessages] = useState([]);
+  const [respondedRequests, setRespondedRequests] = useState(new Set());
   const decodedPhone = decodeURIComponent(phone);
+  const bottomRef = useRef(null);
 
   useEffect(() => {
     loadMessages();
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
   }, [phone]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   async function loadMessages() {
     try {
@@ -21,18 +28,26 @@ export default function SimProvider() {
   }
 
   async function respond(requestId, response) {
+    if (respondedRequests.has(requestId)) return;
+    setRespondedRequests(prev => new Set([...prev, requestId]));
     try {
       await api.post('/sim/provider/respond', { request_id: requestId, response });
       loadMessages();
-    } catch {}
+    } catch {
+      setRespondedRequests(prev => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
+    }
   }
+
+  // Reverse so newest at bottom (WhatsApp style)
+  const orderedMessages = [...messages].reverse();
 
   return (
     <div className="container" style={{ maxWidth: '480px' }}>
-      <div className="flex gap-1 mb-2" style={{ fontSize: '0.8125rem' }}>
-        <Link to="/sim/group" className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>Group</Link>
-        <Link to="/monitor" className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>Monitor</Link>
-      </div>
+      <SimNav />
 
       <div style={{
         background: '#075e54', color: 'white', padding: '0.75rem 1rem',
@@ -44,47 +59,59 @@ export default function SimProvider() {
 
       <div style={{
         background: '#e5ddd5', padding: '0.75rem',
-        minHeight: '50vh', borderRadius: '0 0 12px 12px',
+        minHeight: '50vh', maxHeight: '70vh', overflowY: 'auto',
+        borderRadius: '0 0 12px 12px',
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
       }}>
-        {messages.length === 0 && (
+        {orderedMessages.length === 0 && (
           <p style={{ textAlign: 'center', color: '#999', paddingTop: '2rem', fontSize: '0.875rem' }}>
             No messages yet. Match a service request from the Monitor tool.
           </p>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} style={{
-            background: '#dcf8c6',
-            borderRadius: '8px',
-            padding: '0.625rem 0.75rem',
-            marginBottom: '0.5rem',
-            maxWidth: '90%',
-            marginLeft: msg.message_type === 'provider_followup' || msg.message_type === 'provider_visit_notification' ? '0' : 'auto',
-            boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
-          }}>
-            <div style={{ fontSize: '0.6875rem', color: '#075e54', fontWeight: 600, marginBottom: '0.25rem' }}>
-              Mishelanu
-            </div>
-            <div style={{ fontSize: '0.875rem', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
-              {msg.message_body}
-            </div>
-            <div style={{ fontSize: '0.6875rem', color: '#999', marginTop: '0.25rem' }}>
-              {new Date(msg.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            </div>
+        {orderedMessages.map((msg, i) => {
+          const hasResponded = respondedRequests.has(msg.service_request_id) ||
+            msg.message_type !== 'provider_opportunity';
 
-            {msg.message_type === 'provider_opportunity' && msg.service_request_id && (
-              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.375rem 1rem' }}
-                  onClick={() => respond(msg.service_request_id, 'YES')}>
-                  YES
-                </button>
-                <button className="btn btn-danger" style={{ fontSize: '0.75rem', padding: '0.375rem 1rem' }}
-                  onClick={() => respond(msg.service_request_id, 'NO')}>
-                  NO
-                </button>
+          return (
+            <div key={msg.id || i} style={{
+              background: '#dcf8c6',
+              borderRadius: '8px',
+              padding: '0.625rem 0.75rem',
+              marginBottom: '0.5rem',
+              maxWidth: '90%',
+              boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
+            }}>
+              <div style={{ fontSize: '0.6875rem', color: '#075e54', fontWeight: 600, marginBottom: '0.25rem' }}>
+                Mishelanu
               </div>
-            )}
-          </div>
-        ))}
+              <div style={{ fontSize: '0.875rem', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
+                {msg.message_body}
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: '#999', marginTop: '0.25rem' }}>
+                {new Date(msg.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+
+              {msg.message_type === 'provider_opportunity' && msg.service_request_id && !hasResponded && (
+                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                  <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.375rem 1rem' }}
+                    onClick={() => respond(msg.service_request_id, 'YES')}>
+                    YES
+                  </button>
+                  <button className="btn btn-danger" style={{ fontSize: '0.75rem', padding: '0.375rem 1rem' }}
+                    onClick={() => respond(msg.service_request_id, 'NO')}>
+                    NO
+                  </button>
+                </div>
+              )}
+              {msg.message_type === 'provider_opportunity' && hasResponded && (
+                <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#999', fontStyle: 'italic' }}>
+                  Responded
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
       </div>
     </div>
   );

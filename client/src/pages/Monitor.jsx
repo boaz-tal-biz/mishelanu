@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
+import SimNav from '../components/SimNav.jsx';
 
 export default function Monitor() {
   const navigate = useNavigate();
@@ -86,6 +87,7 @@ export default function Monitor() {
 
   return (
     <div className="container" style={{ maxWidth: '720px' }}>
+      <SimNav />
       <h1 style={{ color: 'var(--navy)', fontSize: '1.5rem', marginBottom: '1rem' }}>Monitor Tool</h1>
 
       {error && (

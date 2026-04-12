@@ -1,17 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
+import SimNav from '../components/SimNav.jsx';
 
 export default function SimRequester() {
   const { phone } = useParams();
   const [messages, setMessages] = useState([]);
   const decodedPhone = decodeURIComponent(phone);
+  const bottomRef = useRef(null);
 
   useEffect(() => {
     loadMessages();
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
   }, [phone]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   async function loadMessages() {
     try {
@@ -20,12 +26,12 @@ export default function SimRequester() {
     } catch {}
   }
 
+  // Reverse so newest at bottom (WhatsApp style)
+  const orderedMessages = [...messages].reverse();
+
   return (
     <div className="container" style={{ maxWidth: '480px' }}>
-      <div className="flex gap-1 mb-2" style={{ fontSize: '0.8125rem' }}>
-        <Link to="/sim/group" className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>Group</Link>
-        <Link to="/monitor" className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>Monitor</Link>
-      </div>
+      <SimNav />
 
       <div style={{
         background: '#075e54', color: 'white', padding: '0.75rem 1rem',
@@ -37,15 +43,17 @@ export default function SimRequester() {
 
       <div style={{
         background: '#e5ddd5', padding: '0.75rem',
-        minHeight: '50vh', borderRadius: '0 0 12px 12px',
+        minHeight: '50vh', maxHeight: '70vh', overflowY: 'auto',
+        borderRadius: '0 0 12px 12px',
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
       }}>
-        {messages.length === 0 && (
+        {orderedMessages.length === 0 && (
           <p style={{ textAlign: 'center', color: '#999', paddingTop: '2rem', fontSize: '0.875rem' }}>
             No messages yet. When a provider accepts a match, you'll see it here.
           </p>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} style={{
+        {orderedMessages.map((msg, i) => (
+          <div key={msg.id || i} style={{
             background: '#dcf8c6',
             borderRadius: '8px',
             padding: '0.625rem 0.75rem',
@@ -74,6 +82,7 @@ export default function SimRequester() {
             </div>
           </div>
         ))}
+        <div ref={bottomRef} />
       </div>
     </div>
   );
