@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
+import cron from 'node-cron';
 import errorHandler from './middleware/errorHandler.js';
 import providersRouter from './routes/providers.js';
 import categoriesRouter from './routes/categories.js';
@@ -13,6 +14,8 @@ import recommendationsRouter from './routes/recommendations.js';
 import adminRouter from './routes/admin.js';
 import monitorRouter from './routes/monitor.js';
 import simulationRouter from './routes/simulation.js';
+import { runEnrichment } from './jobs/enrichment.js';
+import { checkMissingRecommendations, checkRenewalDue } from './jobs/alerts.js';
 
 dotenv.config();
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env') });
@@ -46,4 +49,20 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Mishelanu server running on port ${PORT}`);
+
+  // Run enrichment every 2 minutes for pending providers
+  cron.schedule('*/2 * * * *', () => {
+    console.log('Running enrichment job...');
+    runEnrichment().catch(err => console.error('Enrichment job error:', err.message));
+  });
+
+  // Daily checks at midnight
+  cron.schedule('0 0 * * *', () => {
+    console.log('Running daily alert checks...');
+    checkMissingRecommendations().catch(err => console.error('Recommendation check error:', err.message));
+    checkRenewalDue().catch(err => console.error('Renewal check error:', err.message));
+  });
+
+  // Also run enrichment on startup for any pending providers
+  runEnrichment().catch(err => console.error('Startup enrichment error:', err.message));
 });
