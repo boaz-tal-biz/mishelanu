@@ -89,8 +89,11 @@ npm run build && npm start
 ```
 
 ## Deployment
-Docker Compose: `docker compose up --build`
-Designed to run on a VPS with Docker installed.
+- **Production:** Hostinger VPS at `http://187.77.179.106:3001`
+- **Server:** root@187.77.179.106, SSH key `~/.ssh/hostinger_vps`
+- **Path on VPS:** `/opt/mishelanu/`
+- **Deploy command:** `cd /opt/mishelanu && docker compose up --build -d`
+- **Redeploy workflow:** rsync changed files from local → VPS, then rebuild
 
 ## Build Progress (2026-04-12)
 
@@ -115,6 +118,7 @@ Designed to run on a VPS with Docker installed.
 ### Known items for iteration
 - Category "Other" suggestion creates admin alert but the approval-to-dropdown flow needs wiring
 - Profile HTML from LLM could benefit from brand styling (currently raw HTML)
-- Simulation screens need links between each other based on phone numbers from actual requests
+- Simulation screens: SimNav links use hardcoded phone numbers — could dynamically pick from active requests
 - Admin category add/edit form (currently API-only, no UI form)
-- Dockerfile untested (Docker not installed on this Mac)
+- HTTPS not configured — clipboard API requires fallback on HTTP (implemented)
+- When seeding providers with recommendations directly in DB, must manually set live_at (enrichment go-live check only triggers during normal flow)
