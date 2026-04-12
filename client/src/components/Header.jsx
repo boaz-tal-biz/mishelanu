@@ -14,7 +14,7 @@ export default function Header() {
       zIndex: 100,
     }}>
       <div className="container flex items-center justify-between">
-        <Link to="/" style={{
+        <Link to="/admin" style={{
           color: 'var(--white)',
           fontSize: '1.25rem',
           fontWeight: 600,
