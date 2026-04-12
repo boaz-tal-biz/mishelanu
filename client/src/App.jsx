@@ -18,7 +18,7 @@ export default function App() {
       <Header />
       <main style={{ padding: '1.5rem 0', minHeight: 'calc(100vh - 56px)' }}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<AdminDashboard />} />
           <Route path="/register" element={<Register />} />
           <Route path="/provider/:slug" element={<Profile />} />
           <Route path="/recommend/:token" element={<Recommend />} />
