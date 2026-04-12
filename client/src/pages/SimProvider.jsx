@@ -9,6 +9,7 @@ export default function SimProvider() {
   const [respondedRequests, setRespondedRequests] = useState(new Set());
   const decodedPhone = decodeURIComponent(phone);
   const bottomRef = useRef(null);
+  const [clearedBefore, setClearedBefore] = useState(null);
 
   useEffect(() => {
     loadMessages();
@@ -42,8 +43,10 @@ export default function SimProvider() {
     }
   }
 
-  // Reverse so newest at bottom (WhatsApp style)
-  const orderedMessages = [...messages].reverse();
+  // Reverse so newest at bottom (WhatsApp style), filter out cleared
+  const orderedMessages = [...messages]
+    .filter(msg => !clearedBefore || new Date(msg.sent_at) > clearedBefore)
+    .reverse();
 
   return (
     <div className="container" style={{ maxWidth: '480px' }}>
@@ -55,6 +58,20 @@ export default function SimProvider() {
       }}>
         Provider Inbox
         <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{decodedPhone}</div>
+      </div>
+
+      <div style={{
+        background: '#25d366', padding: '0.5rem 0.75rem',
+        display: 'flex', alignItems: 'center',
+      }}>
+        <button onClick={() => setClearedBefore(new Date())}
+          style={{
+            background: 'white', border: 'none', borderRadius: '6px',
+            padding: '0.375rem 0.75rem', fontSize: '0.75rem', fontWeight: 500,
+            color: '#075e54', cursor: 'pointer',
+          }}>
+          Clear
+        </button>
       </div>
 
       <div style={{
