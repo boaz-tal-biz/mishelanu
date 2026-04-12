@@ -48,6 +48,17 @@ router.get('/provider/:phone/messages', async (req, res, next) => {
   }
 });
 
+// Clear messages for a provider's simulated inbox
+router.delete('/provider/:phone/messages', async (req, res, next) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    await pool.query(`DELETE FROM outbound_messages WHERE recipient_phone = $1`, [phone]);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Get messages for a requester's simulated inbox
 router.get('/requester/:phone/messages', async (req, res, next) => {
   try {
@@ -61,6 +72,22 @@ router.get('/requester/:phone/messages', async (req, res, next) => {
       [phone]
     );
     res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Clear messages for a requester's simulated inbox
+router.delete('/requester/:phone/messages', async (req, res, next) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    await pool.query(
+      `DELETE FROM outbound_messages WHERE id IN (
+        SELECT om.id FROM outbound_messages om
+        JOIN service_requests sr ON om.service_request_id = sr.id
+        WHERE sr.requester_phone = $1 AND om.message_type = 'requester_match'
+      )`, [phone]);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

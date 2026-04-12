@@ -110,31 +110,42 @@ export default function Monitor() {
         </div>
       )}
 
-      {/* Step 2: Review parsed */}
+      {/* Step 2: Review and edit parsed fields */}
       {step === 'parsed' && parsed && (
         <div className="card">
           <h3 style={{ color: 'var(--navy)', fontSize: '1rem', marginBottom: '0.75rem' }}>Parsed Request</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-            {[
-              ['Service needed', parsed.service_needed],
-              ['Location', parsed.location || 'Not specified'],
-              ['Urgency', parsed.urgency || 'Not specified'],
-              ['Requester phone', parsed.requester_phone || 'Not visible'],
-            ].map(([label, val]) => (
-              <div key={label}>
-                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem' }}>{label}</div>
-                <div style={{ fontSize: '0.875rem' }}>{val}</div>
-              </div>
-            ))}
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Service needed</label>
+              <input value={parsed.service_needed || ''} onChange={e => setParsed(p => ({ ...p, service_needed: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Location</label>
+              <input value={parsed.location || ''} onChange={e => setParsed(p => ({ ...p, location: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Urgency</label>
+              <input value={parsed.urgency || ''} onChange={e => setParsed(p => ({ ...p, urgency: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Requester phone *</label>
+              <input required value={parsed.requester_phone || ''} placeholder="e.g. +447700100003"
+                onChange={e => setParsed(p => ({ ...p, requester_phone: e.target.value }))} />
+            </div>
           </div>
-          {parsed.context && (
-            <div className="mb-2">
-              <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem' }}>Context</div>
-              <div style={{ fontSize: '0.875rem' }}>{parsed.context}</div>
+          <div className="form-group">
+            <label>Context</label>
+            <input value={parsed.context || ''} onChange={e => setParsed(p => ({ ...p, context: e.target.value }))} />
+          </div>
+          {!parsed.requester_phone && (
+            <div style={{ background: 'rgba(232,90,79,0.08)', color: 'var(--coral)', padding: '0.5rem 0.75rem', borderRadius: '6px', marginBottom: '0.75rem', fontSize: '0.8125rem' }}>
+              Requester phone is required — the monitor needs to enter it from the WhatsApp message.
             </div>
           )}
           <div className="flex gap-1">
-            <button className="btn btn-primary" onClick={handleCreateRequest}>Confirm & Search Providers</button>
+            <button className="btn btn-primary" onClick={handleCreateRequest} disabled={!parsed.requester_phone?.trim()}>
+              Confirm & Search Providers
+            </button>
             <button className="btn btn-outline" onClick={() => setStep('paste')}>Back</button>
           </div>
         </div>

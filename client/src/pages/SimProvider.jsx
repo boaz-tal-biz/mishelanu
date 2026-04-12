@@ -9,7 +9,7 @@ export default function SimProvider() {
   const [respondedRequests, setRespondedRequests] = useState(new Set());
   const decodedPhone = decodeURIComponent(phone);
   const bottomRef = useRef(null);
-  const [clearedBefore, setClearedBefore] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     loadMessages();
@@ -43,10 +43,18 @@ export default function SimProvider() {
     }
   }
 
-  // Reverse so newest at bottom (WhatsApp style), filter out cleared
-  const orderedMessages = [...messages]
-    .filter(msg => !clearedBefore || new Date(msg.sent_at) > clearedBefore)
-    .reverse();
+  async function clearMessages() {
+    setClearing(true);
+    try {
+      await api.del(`/sim/provider/${encodeURIComponent(decodedPhone)}/messages`);
+      setMessages([]);
+      setRespondedRequests(new Set());
+    } catch {}
+    setClearing(false);
+  }
+
+  // Reverse so newest at bottom (WhatsApp style)
+  const orderedMessages = [...messages].reverse();
 
   return (
     <div className="container" style={{ maxWidth: '480px' }}>
@@ -64,7 +72,7 @@ export default function SimProvider() {
         background: '#25d366', padding: '0.5rem 0.75rem',
         display: 'flex', alignItems: 'center',
       }}>
-        <button onClick={() => setClearedBefore(new Date())}
+        <button onClick={clearMessages} disabled={clearing}
           style={{
             background: 'white', border: 'none', borderRadius: '6px',
             padding: '0.375rem 0.75rem', fontSize: '0.75rem', fontWeight: 500,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
 import SimNav from '../components/SimNav.jsx';
@@ -8,7 +8,7 @@ export default function SimRequester() {
   const [messages, setMessages] = useState([]);
   const decodedPhone = decodeURIComponent(phone);
   const bottomRef = useRef(null);
-  const [clearedBefore, setClearedBefore] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     loadMessages();
@@ -27,10 +27,17 @@ export default function SimRequester() {
     } catch {}
   }
 
-  // Reverse so newest at bottom (WhatsApp style), filter out cleared
-  const orderedMessages = [...messages]
-    .filter(msg => !clearedBefore || new Date(msg.sent_at) > clearedBefore)
-    .reverse();
+  async function clearMessages() {
+    setClearing(true);
+    try {
+      await api.del(`/sim/requester/${encodeURIComponent(decodedPhone)}/messages`);
+      setMessages([]);
+    } catch {}
+    setClearing(false);
+  }
+
+  // Reverse so newest at bottom (WhatsApp style)
+  const orderedMessages = [...messages].reverse();
 
   return (
     <div className="container" style={{ maxWidth: '480px' }}>
@@ -48,7 +55,7 @@ export default function SimRequester() {
         background: '#25d366', padding: '0.5rem 0.75rem',
         display: 'flex', alignItems: 'center',
       }}>
-        <button onClick={() => setClearedBefore(new Date())}
+        <button onClick={clearMessages} disabled={clearing}
           style={{
             background: 'white', border: 'none', borderRadius: '6px',
             padding: '0.375rem 0.75rem', fontSize: '0.75rem', fontWeight: 500,
@@ -70,7 +77,8 @@ export default function SimRequester() {
           </p>
         )}
         {orderedMessages.map((msg, i) => (
-          <div key={msg.id || i} style={{
+          <React.Fragment key={msg.id || i}>
+          <div style={{
             background: '#dcf8c6',
             borderRadius: '8px',
             padding: '0.625rem 0.75rem',
@@ -98,6 +106,35 @@ export default function SimRequester() {
               {new Date(msg.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
             </div>
           </div>
+
+          {/* Viral follow-up message after each match message */}
+          <div style={{
+            background: '#dcf8c6',
+            borderRadius: '8px',
+            padding: '0.625rem 0.75rem',
+            marginBottom: '0.5rem',
+            maxWidth: '90%',
+            boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
+          }}>
+            <div style={{ fontSize: '0.6875rem', color: '#075e54', fontWeight: 600, marginBottom: '0.25rem' }}>
+              Mishelanu
+            </div>
+            <div style={{ fontSize: '0.875rem', lineHeight: 1.4 }}>
+              Mishelanu — like this service? Add Mishelanu to your contacts, and next time you can just ask us directly.
+            </div>
+            <button style={{
+              marginTop: '0.5rem',
+              background: '#075e54', color: 'white', border: 'none', borderRadius: '6px',
+              padding: '0.5rem 1rem', fontSize: '0.8125rem', fontWeight: 500,
+              cursor: 'default', opacity: 0.9,
+            }}>
+              Add to Contacts
+            </button>
+            <div style={{ fontSize: '0.6875rem', color: '#999', marginTop: '0.25rem' }}>
+              {new Date(msg.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+          </React.Fragment>
         ))}
         <div ref={bottomRef} />
       </div>
