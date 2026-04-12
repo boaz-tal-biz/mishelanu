@@ -21,12 +21,17 @@ Community trust network for Jewish/Israeli communities in the UK. Providers regi
 mishelanu/
 ├── server/           # Express API (port 3001)
 │   └── src/
-│       ├── index.js
-│       ├── db/       # pool, migrations
-│       ├── middleware/
-│       └── routes/   # providers, categories, recommendations, admin, monitor, simulation
-├── client/           # React SPA (served from /client/dist)
+│       ├── index.js  # Main app + cron job scheduling
+│       ├── db/       # pool, migrations (001-003)
+│       ├── middleware/  # auth.js, errorHandler.js
+│       ├── routes/   # providers, categories, recommendations, admin, monitor, simulation
+│       └── jobs/     # enrichment.js (LLM), alerts.js (recommendation + renewal checks)
+├── client/           # React SPA (Vite, served from /client/dist)
 │   └── src/
+│       ├── pages/    # Home, Register, Profile, Recommend, AdminLogin, AdminDashboard,
+│       │             # AdminProvider, Monitor, SimGroup, SimProvider, SimRequester
+│       ├── components/  # Header
+│       └── hooks/    # useApi.js (fetch wrapper)
 ├── docker-compose.yml
 ├── Dockerfile        # Multi-stage: build client, then serve from Express
 └── .env.example
@@ -86,3 +91,30 @@ npm run build && npm start
 ## Deployment
 Docker Compose: `docker compose up --build`
 Designed to run on a VPS with Docker installed.
+
+## Build Progress (2026-04-12)
+
+| Stage | Status | Commit | Notes |
+|-------|--------|--------|-------|
+| 0. Initial skeleton | Done | `4c21804` | Server scaffold, migrations, Docker config |
+| 1. Database setup | Done | `2216331` | Postgres 16 via Homebrew, all migrations, 31 seed categories |
+| 2. Server API routes | Done | `013cfd9` | All routes implemented: providers, recs, admin CRUD + PDF, monitor + Claude parsing, simulation |
+| 3-6. React client | Done | `a85b5fc` | Full client: register, profile, recommend, admin dashboard, monitor, 3 sim screens |
+| 8. Background jobs | Done | `a824b1f` | LLM enrichment (startup + cron), recommendation + renewal alert checks |
+| 9. Integration test | Done | — | Full flow tested: register → enrich → recommend → go live → monitor parse → match → YES → requester notified |
+
+### Tested flow
+1. Provider registers → gets slug + recommendation token
+2. LLM enrichment generates parsed_profile + profile_html + category suggestions
+3. Recommendation submitted → provider goes live (after enrichment)
+4. Admin sees alerts (new registration, category suggestion)
+5. Monitor parses WhatsApp message via Claude → creates request → searches providers → sends match
+6. Provider responds YES → requester gets profile link → profile visit tracked
+7. All outbound messages logged in simulation tables
+
+### Known items for iteration
+- Category "Other" suggestion creates admin alert but the approval-to-dropdown flow needs wiring
+- Profile HTML from LLM could benefit from brand styling (currently raw HTML)
+- Simulation screens need links between each other based on phone numbers from actual requests
+- Admin category add/edit form (currently API-only, no UI form)
+- Dockerfile untested (Docker not installed on this Mac)

@@ -90,6 +90,20 @@ Reply ONLY with valid JSON, no markdown fences.`
         );
       }
 
+      // Check if provider should go live: enrichment now processed + at least 1 recommendation
+      const { rows: recCount } = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM recommendations WHERE provider_id = $1`,
+        [provider.id]
+      );
+      if (recCount[0].count > 0) {
+        await pool.query(
+          `UPDATE providers SET live_at = NOW(), updated_at = NOW()
+           WHERE id = $1 AND live_at IS NULL`,
+          [provider.id]
+        );
+        console.log(`Provider ${provider.full_name} is now live`);
+      }
+
       console.log(`Enriched provider: ${provider.full_name}`);
     } catch (err) {
       console.error(`Enrichment failed for ${provider.id}:`, err.message);
