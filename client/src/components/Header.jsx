@@ -1,9 +1,13 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../hooks/useApi.js';
 
 export default function Header() {
-  const location = useLocation();
-  const isAdmin = location.pathname.startsWith('/admin') || location.pathname.startsWith('/monitor');
-  const isSim = location.pathname.startsWith('/sim');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    api.get('/admin/check').then(() => setIsAdmin(true)).catch(() => {});
+  }, []);
 
   return (
     <header style={{
@@ -49,7 +53,7 @@ export default function Header() {
           }}>
             Contact
           </Link>
-          {(isAdmin || isSim) && (
+          {isAdmin && (
             <>
               <Link to="/admin" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
                 Dashboard
