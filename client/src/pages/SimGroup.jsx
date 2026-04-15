@@ -34,11 +34,11 @@ export default function SimGroup() {
       <SimNav />
 
       <div style={{
-        background: '#075e54', color: 'white', padding: '0.75rem 1rem',
-        borderRadius: '12px 12px 0 0', fontWeight: 500,
+        background: 'linear-gradient(135deg, var(--navy) 0%, #2a3f6b 100%)', color: 'white', padding: '0.875rem 1rem',
+        borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0', fontWeight: 600,
       }}>
         NW London Community
-        <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{messages.length} messages</div>
+        <div style={{ fontSize: '0.75rem', opacity: 0.7, fontWeight: 400 }}>{messages.length} messages</div>
       </div>
 
       <div style={{
@@ -47,16 +47,16 @@ export default function SimGroup() {
         padding: '0.75rem',
         maxHeight: '70vh',
         overflowY: 'auto',
-        borderRadius: '0 0 12px 12px',
+        borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
       }}>
         {messages.map((msg, i) => (
           <div key={i} style={{
             background: 'white',
-            borderRadius: '8px',
-            padding: '0.5rem 0.75rem',
+            borderRadius: 'var(--radius)',
+            padding: '0.625rem 0.875rem',
             marginBottom: '0.375rem',
             maxWidth: '85%',
-            boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
+            boxShadow: 'var(--shadow-sm)',
           }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: colorForName(msg.sender), marginBottom: '0.125rem' }}>
               {msg.sender}
@@ -66,8 +66,8 @@ export default function SimGroup() {
               <span style={{ fontSize: '0.6875rem', color: '#999' }}>{msg.time}</span>
               <button onClick={() => copyMessage(msg)}
                 style={{
-                  background: 'none', border: 'none', color: '#075e54',
-                  fontSize: '0.6875rem', cursor: 'pointer', fontWeight: 500,
+                  background: 'none', border: 'none', color: 'var(--teal)',
+                  fontSize: '0.6875rem', cursor: 'pointer', fontWeight: 600,
                 }}>
                 Copy
               </button>

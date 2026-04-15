@@ -44,22 +44,22 @@ export default function SimRequester() {
       <SimNav />
 
       <div style={{
-        background: '#075e54', color: 'white', padding: '0.75rem 1rem',
-        borderRadius: '12px 12px 0 0', fontWeight: 500,
+        background: 'linear-gradient(135deg, var(--navy) 0%, #2a3f6b 100%)', color: 'white', padding: '0.875rem 1rem',
+        borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0', fontWeight: 600,
       }}>
-        Requester Inbox
-        <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{decodedPhone}</div>
+        Your Inbox
+        <div style={{ fontSize: '0.75rem', opacity: 0.7, fontWeight: 400 }}>{decodedPhone}</div>
       </div>
 
       <div style={{
-        background: '#25d366', padding: '0.5rem 0.75rem',
+        background: 'var(--teal)', padding: '0.5rem 0.75rem',
         display: 'flex', alignItems: 'center',
       }}>
         <button onClick={clearMessages} disabled={clearing}
           style={{
             background: 'white', border: 'none', borderRadius: '6px',
-            padding: '0.375rem 0.75rem', fontSize: '0.75rem', fontWeight: 500,
-            color: '#075e54', cursor: 'pointer',
+            padding: '0.375rem 0.75rem', fontSize: '0.75rem', fontWeight: 600,
+            color: 'var(--navy)', cursor: 'pointer',
           }}>
           Clear
         </button>
@@ -68,34 +68,35 @@ export default function SimRequester() {
       <div style={{
         background: '#e5ddd5', padding: '0.75rem',
         minHeight: '50vh', maxHeight: '70vh', overflowY: 'auto',
-        borderRadius: '0 0 12px 12px',
+        borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
       }}>
         {orderedMessages.length === 0 && (
-          <p style={{ textAlign: 'center', color: '#999', paddingTop: '2rem', fontSize: '0.875rem' }}>
-            No messages yet. When a provider accepts a match, you'll see it here.
-          </p>
+          <div className="empty-state">
+            <span className="empty-emoji">&#x1F4EC;</span>
+            <p>Waiting for Mishelanu to find you a provider. When a provider says yes, you'll see their details here.</p>
+          </div>
         )}
         {orderedMessages.map((msg, i) => (
           <React.Fragment key={msg.id || i}>
           <div style={{
             background: '#dcf8c6',
-            borderRadius: '8px',
-            padding: '0.625rem 0.75rem',
+            borderRadius: 'var(--radius)',
+            padding: '0.75rem 0.875rem',
             marginBottom: '0.5rem',
             maxWidth: '90%',
-            boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
+            boxShadow: 'var(--shadow-sm)',
           }}>
-            <div style={{ fontSize: '0.6875rem', color: '#075e54', fontWeight: 600, marginBottom: '0.25rem' }}>
+            <div style={{ fontSize: '0.6875rem', color: 'var(--teal-dark)', fontWeight: 600, marginBottom: '0.25rem' }}>
               Mishelanu
             </div>
-            <div style={{ fontSize: '0.875rem', lineHeight: 1.4 }}>
+            <div style={{ fontSize: '0.875rem', lineHeight: 1.5 }}>
               {msg.message_body.includes('/provider/') ? (
                 <>
                   {msg.message_body.split(/(?=\/provider\/)/)[0]}
                   <Link to={msg.message_body.match(/\/provider\/\S+/)?.[0] || '#'}
-                    style={{ color: '#075e54', textDecoration: 'underline' }}>
-                    {msg.message_body.match(/\/provider\/\S+/)?.[0]}
+                    style={{ color: 'var(--teal-dark)', textDecoration: 'underline', fontWeight: 500 }}>
+                    View their profile
                   </Link>
                 </>
               ) : (
@@ -107,28 +108,28 @@ export default function SimRequester() {
             </div>
           </div>
 
-          {/* Viral follow-up message after each match message */}
+          {/* Follow-up message */}
           <div style={{
             background: '#dcf8c6',
-            borderRadius: '8px',
-            padding: '0.625rem 0.75rem',
+            borderRadius: 'var(--radius)',
+            padding: '0.75rem 0.875rem',
             marginBottom: '0.5rem',
             maxWidth: '90%',
-            boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
+            boxShadow: 'var(--shadow-sm)',
           }}>
-            <div style={{ fontSize: '0.6875rem', color: '#075e54', fontWeight: 600, marginBottom: '0.25rem' }}>
+            <div style={{ fontSize: '0.6875rem', color: 'var(--teal-dark)', fontWeight: 600, marginBottom: '0.25rem' }}>
               Mishelanu
             </div>
-            <div style={{ fontSize: '0.875rem', lineHeight: 1.4 }}>
-              Mishelanu — like this service? Add Mishelanu to your contacts, and next time you can just ask us directly.
+            <div style={{ fontSize: '0.875rem', lineHeight: 1.5 }}>
+              Glad Mishelanu could help! Save our number — next time you need something, just message us directly. Kol tuv!
             </div>
             <button style={{
               marginTop: '0.5rem',
-              background: '#075e54', color: 'white', border: 'none', borderRadius: '6px',
-              padding: '0.5rem 1rem', fontSize: '0.8125rem', fontWeight: 500,
+              background: 'var(--navy)', color: 'white', border: 'none', borderRadius: '8px',
+              padding: '0.5rem 1rem', fontSize: '0.8125rem', fontWeight: 600,
               cursor: 'default', opacity: 0.9,
             }}>
-              Add to Contacts
+              Save Mishelanu
             </button>
             <div style={{ fontSize: '0.6875rem', color: '#999', marginTop: '0.25rem' }}>
               {new Date(msg.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}

@@ -11,6 +11,7 @@ import Monitor from './pages/Monitor.jsx';
 import SimGroup from './pages/SimGroup.jsx';
 import SimProvider from './pages/SimProvider.jsx';
 import SimRequester from './pages/SimRequester.jsx';
+import ContactUs from './pages/ContactUs.jsx';
 
 export default function App() {
   return (
@@ -18,7 +19,7 @@ export default function App() {
       <Header />
       <main style={{ padding: '1.5rem 0', minHeight: 'calc(100vh - 56px)' }}>
         <Routes>
-          <Route path="/" element={<AdminDashboard />} />
+          <Route path="/" element={<Home />} />
           <Route path="/register" element={<Register />} />
           <Route path="/provider/:slug" element={<Profile />} />
           <Route path="/recommend/:token" element={<Recommend />} />
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/sim/group" element={<SimGroup />} />
           <Route path="/sim/provider/:phone" element={<SimProvider />} />
           <Route path="/sim/requester/:phone" element={<SimRequester />} />
+          <Route path="/contact" element={<ContactUs />} />
         </Routes>
       </main>
     </>

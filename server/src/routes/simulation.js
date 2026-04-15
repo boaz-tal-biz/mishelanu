@@ -124,14 +124,14 @@ router.post('/provider/respond', async (req, res, next) => {
         `INSERT INTO outbound_messages (service_request_id, provider_id, recipient_phone, message_type, message_body)
          VALUES ($1, $2, $3, 'requester_match', $4)`,
         [request_id, request.matched_provider_id, request.requester_phone,
-         `Mishelanu has found a trusted community service provider for you. View their profile here: ${profileUrl}`]
+         `Mazel tov! Mishelanu found a trusted community provider for you. Check out their profile: ${profileUrl}`]
       );
 
       // Send confirmation to provider
       await pool.query(
         `INSERT INTO outbound_messages (service_request_id, provider_id, recipient_phone, message_type, message_body)
          VALUES ($1, $2, $3, 'provider_followup',
-           'Your details have been shared with the requester. They may contact you directly.')`,
+           'Yofi! Mishelanu has shared your details with the requester. They may contact you directly. B''hatzlacha!')`,
         [request_id, request.matched_provider_id, request.provider_phone]
       );
 

@@ -18,15 +18,16 @@ export default function Profile() {
       .finally(() => setLoading(false));
   }, [slug, searchParams]);
 
-  if (loading) return <div className="container text-center mt-4">Loading...</div>;
+  if (loading) return <div className="container text-center mt-4"><span className="loading-text">Mishelanu is loading this profile...</span></div>;
   if (error) return <div className="container text-center mt-4" style={{ color: 'var(--coral)' }}>{error}</div>;
 
   // Not live states
   if (provider.status === 'pending') {
     return (
       <div className="container text-center mt-4">
-        <div className="card" style={{ maxWidth: '480px', margin: '0 auto' }}>
-          <h2 style={{ color: 'var(--navy)' }}>Profile in Progress</h2>
+        <div className="card card-accent-gold" style={{ maxWidth: '480px', margin: '0 auto' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>&#x1F527;</div>
+          <h2 style={{ color: 'var(--navy)' }}>Mishelanu is getting this profile ready</h2>
           <p style={{ color: 'var(--gray-500)', marginTop: '0.5rem' }}>{provider.message}</p>
         </div>
       </div>
@@ -37,7 +38,7 @@ export default function Profile() {
     return (
       <div className="container text-center mt-4">
         <div className="card" style={{ maxWidth: '480px', margin: '0 auto' }}>
-          <h2 style={{ color: 'var(--navy)' }}>Unavailable</h2>
+          <h2 style={{ color: 'var(--navy)' }}>This profile is currently unavailable</h2>
           <p style={{ color: 'var(--gray-500)', marginTop: '0.5rem' }}>{provider.message}</p>
         </div>
       </div>
@@ -46,7 +47,7 @@ export default function Profile() {
 
   return (
     <div className="container" style={{ maxWidth: '640px' }}>
-      <div className="card">
+      <div className="card card-accent">
         <div className="flex items-center justify-between mb-2">
           <div>
             <h1 style={{ color: 'var(--navy)', fontSize: '1.5rem' }}>{provider.full_name}</h1>
@@ -55,8 +56,8 @@ export default function Profile() {
             )}
           </div>
           {provider.verified && (
-            <span className="badge badge-teal" style={{ fontSize: '0.8125rem' }}>
-              Community Verified
+            <span className="badge badge-teal" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.875rem' }}>
+              &#x2B50; Community Verified
             </span>
           )}
         </div>
@@ -83,7 +84,7 @@ export default function Profile() {
 
         {provider.raw_external_links && (
           <div className="mb-3">
-            <h3 style={{ fontSize: '0.9375rem', color: 'var(--navy)', marginBottom: '0.375rem' }}>External Profiles</h3>
+            <h3 style={{ fontSize: '0.9375rem', color: 'var(--navy)', marginBottom: '0.375rem' }}>Find me online</h3>
             {provider.raw_external_links.split(/[\n,]+/).filter(Boolean).map((link, i) => {
               const url = link.trim();
               return (
@@ -100,7 +101,7 @@ export default function Profile() {
         {/* Contact buttons */}
         <div className="flex gap-1 mb-3">
           <a href={`tel:${provider.mobile_phone}`} className="btn btn-primary">
-            Call
+            &#x1F4DE; Call
           </a>
           <a href={`https://wa.me/${provider.whatsapp_number?.replace(/[^0-9]/g, '')}`}
             className="btn btn-secondary" target="_blank" rel="noopener noreferrer">
@@ -111,14 +112,14 @@ export default function Profile() {
         {/* Recommendations */}
         <div>
           <h3 style={{ fontSize: '0.9375rem', color: 'var(--navy)', marginBottom: '0.75rem' }}>
-            Recommendations ({provider.recommendation_count}/3)
+            Community Recommendations ({provider.recommendation_count}/3)
           </h3>
           {provider.recommendations?.length > 0 ? (
             provider.recommendations.map((rec, i) => (
               <div key={i} style={{
-                padding: '0.75rem',
+                padding: '0.875rem',
                 background: 'var(--gray-100)',
-                borderRadius: '8px',
+                borderRadius: 'var(--radius)',
                 marginBottom: '0.5rem'
               }}>
                 <div className="flex items-center justify-between mb-1">
@@ -129,7 +130,9 @@ export default function Profile() {
               </div>
             ))
           ) : (
-            <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>No recommendations yet.</p>
+            <div className="empty-state" style={{ padding: '1.5rem' }}>
+              <p>Waiting for the first community recommendation.</p>
+            </div>
           )}
         </div>
       </div>

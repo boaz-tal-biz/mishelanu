@@ -7,36 +7,57 @@ export default function Header() {
 
   return (
     <header style={{
-      background: 'var(--navy)',
-      padding: '0.75rem 0',
+      background: 'linear-gradient(135deg, var(--navy) 0%, #2a3f6b 100%)',
+      padding: '0.875rem 0',
       position: 'sticky',
       top: 0,
       zIndex: 100,
+      boxShadow: '0 2px 12px rgba(26, 39, 68, 0.2)',
     }}>
       <div className="container flex items-center justify-between">
-        <Link to="/admin" style={{
+        <Link to="/" style={{
           color: 'var(--white)',
-          fontSize: '1.25rem',
-          fontWeight: 600,
+          fontSize: '1.375rem',
+          fontWeight: 700,
           textDecoration: 'none',
           letterSpacing: '-0.02em',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
         }}>
+          <span style={{ fontSize: '1.5rem' }}>&#x2721;</span>
           Mishelanu
         </Link>
 
-        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <Link to="/register" style={{ color: 'var(--teal)', fontSize: '0.875rem', textDecoration: 'none' }}>
-            Register
+        <nav style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <Link to="/register" style={{
+            color: 'var(--white)',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            textDecoration: 'none',
+            padding: '0.375rem 0.875rem',
+            borderRadius: 'var(--radius-pill)',
+            background: 'var(--teal)',
+            transition: 'background 0.2s ease',
+          }}>
+            Join Us
+          </Link>
+          <Link to="/contact" style={{
+            color: 'rgba(255,255,255,0.8)',
+            fontSize: '0.875rem',
+            textDecoration: 'none',
+          }}>
+            Contact
           </Link>
           {(isAdmin || isSim) && (
             <>
-              <Link to="/admin" style={{ color: 'var(--gray-300)', fontSize: '0.875rem', textDecoration: 'none' }}>
-                Admin
+              <Link to="/admin" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
+                Dashboard
               </Link>
-              <Link to="/monitor" style={{ color: 'var(--gray-300)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              <Link to="/monitor" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
                 Monitor
               </Link>
-              <Link to="/sim/group" style={{ color: 'var(--gray-300)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              <Link to="/sim/group" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
                 Simulation
               </Link>
             </>

@@ -70,24 +70,37 @@ router.get('/search', requireAdmin, async (req, res, next) => {
     const { q } = req.query;
     if (!q) return res.status(400).json({ error: 'Search query (q) required' });
 
+    // Split query into meaningful keywords (3+ chars) for flexible matching
+    const keywords = q.split(/\s+/).filter(w => w.length >= 3);
+    if (keywords.length === 0) keywords.push(q.trim());
+
+    // Build OR conditions for each keyword across all searchable fields
+    const conditions = [];
+    const params = [];
+    for (const keyword of keywords) {
+      const i = params.length + 1;
+      params.push(`%${keyword}%`);
+      conditions.push(`(
+        p.full_name ILIKE $${i}
+        OR p.business_name ILIKE $${i}
+        OR p.raw_description ILIKE $${i}
+        OR p.address ILIKE $${i}
+        OR EXISTS (SELECT 1 FROM unnest(p.service_categories) AS cat WHERE cat ILIKE $${i})
+      )`);
+    }
+
     const { rows } = await pool.query(
       `SELECT p.id, p.slug, p.full_name, p.business_name, p.service_categories,
               p.address, p.mobile_phone, p.whatsapp_number,
               (SELECT COUNT(*)::int FROM recommendations WHERE provider_id = p.id) AS recommendation_count
        FROM providers p
        WHERE p.status = 'active' AND p.live_at IS NOT NULL
-         AND (
-           p.full_name ILIKE $1
-           OR p.business_name ILIKE $1
-           OR p.raw_description ILIKE $1
-           OR p.address ILIKE $1
-           OR EXISTS (SELECT 1 FROM unnest(p.service_categories) AS cat WHERE cat ILIKE $1)
-         )
+         AND (${conditions.join(' OR ')})
        ORDER BY
          (SELECT COUNT(*) FROM recommendations WHERE provider_id = p.id) DESC,
          p.full_name
        LIMIT 20`,
-      [`%${q}%`]
+      params
     );
 
     res.json(rows);
@@ -121,15 +134,14 @@ router.post('/match', requireAdmin, async (req, res, next) => {
     );
 
     // Build and store outbound message to provider
-    const messageBody = `Mishelanu — Service Request
+    const messageBody = `Shalom! Mishelanu has a request from the community:
 
-A community member is looking for help:
-• Service needed: ${request.parsed_service_needed || 'Not specified'}
-• Location: ${request.parsed_location || 'Not specified'}
-• Urgency: ${request.parsed_urgency || 'Not specified'}
-• Details: ${request.parsed_context || 'None'}
+Someone is looking for: ${request.parsed_service_needed || 'a service provider'}
+${request.parsed_location ? `Area: ${request.parsed_location}` : ''}
+${request.parsed_urgency && request.parsed_urgency !== 'not specified' ? `Urgency: ${request.parsed_urgency}` : ''}
+${request.parsed_context ? `Details: ${request.parsed_context}` : ''}
 
-Reply YES if you'd like us to connect you, or NO to pass.`;
+Interested? Reply YES and Mishelanu will connect you. Otherwise reply NO — no hard feelings!`;
 
     await pool.query(
       `INSERT INTO outbound_messages (service_request_id, provider_id, recipient_phone, message_type, message_body)

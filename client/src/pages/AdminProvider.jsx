@@ -2,6 +2,26 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
 
+const STATUS_LABELS = {
+  active: 'Active',
+  suspended: 'Paused',
+  awaiting_payment: 'Payment Due',
+  deleted: 'Removed',
+};
+
+const STATUS_COLOURS = {
+  active: 'var(--teal)',
+  suspended: 'var(--coral)',
+  awaiting_payment: 'var(--gold)',
+  deleted: '#888',
+};
+
+const ENRICHMENT_LABELS = {
+  pending: 'Being Prepared',
+  processed: 'Ready for Review',
+  reviewed: 'Reviewed',
+};
+
 export default function AdminProvider() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -68,24 +88,43 @@ export default function AdminProvider() {
     URL.revokeObjectURL(url);
   }
 
+  const EDIT_FIELD_LABELS = {
+    full_name: 'Full name',
+    business_name: 'Business name',
+    address: 'Location',
+    mobile_phone: 'Mobile phone',
+    whatsapp_number: 'WhatsApp number',
+    business_phone: 'Business phone',
+    email: 'Email',
+  };
+
   if (error && !provider) return <div className="container mt-4" style={{ color: 'var(--coral)' }}>{error}</div>;
-  if (!provider) return <div className="container mt-4">Loading...</div>;
+  if (!provider) return <div className="container mt-4"><span className="loading-text">Mishelanu is loading...</span></div>;
 
   return (
     <div className="container" style={{ maxWidth: '800px' }}>
       <button className="btn btn-outline mb-2" onClick={() => navigate('/admin')} style={{ fontSize: '0.8125rem' }}>
-        Back to Dashboard
+        &#x2190; Back to Dashboard
       </button>
 
       <div className="card mb-3">
         <div className="flex items-center justify-between mb-2">
-          <div>
-            <h1 style={{ color: 'var(--navy)', fontSize: '1.375rem' }}>{provider.full_name}</h1>
-            {provider.business_name && <p style={{ color: 'var(--gray-500)' }}>{provider.business_name}</p>}
+          <div className="flex items-center gap-1">
+            <h1 style={{ color: 'var(--navy)', fontSize: '1.375rem', margin: 0 }}>{provider.full_name}</h1>
+            <span style={{
+              padding: '0.375rem 1rem',
+              borderRadius: 'var(--radius-pill)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              background: STATUS_COLOURS[provider.status] || '#888',
+              color: 'white',
+            }}>
+              {STATUS_LABELS[provider.status] || provider.status}
+            </span>
           </div>
-          <div className="flex gap-1">
-            <span className={`badge ${provider.status === 'active' ? 'badge-teal' : 'badge-coral'}`}>{provider.status}</span>
-            <span className="badge badge-navy">{provider.enrichment_status}</span>
+          <div className="flex items-center gap-1">
+            {provider.business_name && <span style={{ color: 'var(--gray-500)' }}>{provider.business_name}</span>}
+            <span className="badge badge-gold">{ENRICHMENT_LABELS[provider.enrichment_status] || provider.enrichment_status}</span>
           </div>
         </div>
 
@@ -94,16 +133,16 @@ export default function AdminProvider() {
           {provider.status !== 'suspended' && (
             <button className="btn btn-danger" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
               onClick={() => {
-                const reason = prompt('Suspension reason:');
+                const reason = prompt('Reason for pausing:');
                 if (reason !== null) statusAction('suspend', { reason });
               }}>
-              Suspend
+              Pause
             </button>
           )}
           {provider.status !== 'awaiting_payment' && (
             <button className="btn btn-outline" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
               onClick={() => statusAction('awaiting-payment')}>
-              Awaiting Payment
+              Mark Payment Due
             </button>
           )}
           {(provider.status === 'suspended' || provider.status === 'awaiting_payment') && (
@@ -115,66 +154,66 @@ export default function AdminProvider() {
           {provider.status !== 'deleted' && (
             <button className="btn btn-danger" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
               onClick={() => statusAction('delete')}>
-              Delete
+              Remove
             </button>
           )}
           <button className="btn btn-outline" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
             onClick={downloadPdf}>
-            Download Report PDF
+            &#x1F4C4; Download Report
           </button>
         </div>
 
-        {error && <div style={{ color: 'var(--coral)', fontSize: '0.875rem', marginBottom: '1rem' }}>{error}</div>}
+        {error && <div className="msg-error" style={{ marginBottom: '1rem' }}>{error}</div>}
 
         {/* Stats row */}
         <div className="flex gap-1 flex-wrap mb-3">
           {[
             { label: 'Recommendations', value: provider.recommendation_count },
-            { label: 'Total visits', value: provider.total_visits },
-            { label: 'Matched visits', value: provider.matched_visits },
+            { label: 'Profile views', value: provider.total_visits },
+            { label: 'Matched views', value: provider.matched_visits },
             { label: 'Leads sent', value: provider.leads_sent },
           ].map(s => (
-            <div key={s.label} style={{ padding: '0.75rem', background: 'var(--gray-100)', borderRadius: '8px', textAlign: 'center', flex: '1 1 100px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--navy)' }}>{s.value}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{s.label}</div>
+            <div key={s.label} className="stat-card">
+              <div className="stat-value">{s.value}</div>
+              <div className="stat-label">{s.label}</div>
             </div>
           ))}
         </div>
 
         {/* Edit toggle */}
         <div className="flex justify-between items-center mb-2">
-          <h3 style={{ color: 'var(--navy)', fontSize: '1rem' }}>Provider Details</h3>
+          <h3 className="section-heading" style={{ marginBottom: 0 }}>Provider Details</h3>
           <button className="btn btn-outline" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
             onClick={() => editing ? saveEdits() : setEditing(true)}>
-            {editing ? 'Save' : 'Edit'}
+            {editing ? 'Save Changes' : 'Edit'}
           </button>
         </div>
 
         {editing ? (
           <div>
-            {['full_name', 'business_name', 'address', 'mobile_phone', 'whatsapp_number', 'business_phone', 'email'].map(field => (
+            {Object.entries(EDIT_FIELD_LABELS).map(([field, label]) => (
               <div className="form-group" key={field}>
-                <label>{field.replace(/_/g, ' ')}</label>
+                <label>{label}</label>
                 <input value={form[field]} onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))} />
               </div>
             ))}
             <div className="form-group">
-              <label>Raw description</label>
+              <label>Description (original)</label>
               <textarea rows={4} value={form.raw_description} onChange={e => setForm(f => ({ ...f, raw_description: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label>External links</label>
+              <label>Online profiles and links</label>
               <textarea rows={2} value={form.raw_external_links} onChange={e => setForm(f => ({ ...f, raw_external_links: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label>Profile HTML (LLM-generated)</label>
+              <label>Profile content (auto-generated)</label>
               <textarea rows={6} value={form.profile_html} onChange={e => setForm(f => ({ ...f, profile_html: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label>Enrichment status</label>
+              <label>Profile stage</label>
               <select value={form.enrichment_status} onChange={e => setForm(f => ({ ...f, enrichment_status: e.target.value }))}>
-                <option value="pending">Pending</option>
-                <option value="processed">Processed</option>
+                <option value="pending">Being Prepared</option>
+                <option value="processed">Ready for Review</option>
                 <option value="reviewed">Reviewed</option>
               </select>
             </div>
@@ -187,10 +226,10 @@ export default function AdminProvider() {
                 ['Mobile', provider.mobile_phone],
                 ['WhatsApp', provider.whatsapp_number],
                 ['Business phone', provider.business_phone || '—'],
-                ['Address', provider.address || '—'],
-                ['Live since', provider.live_at ? new Date(provider.live_at).toLocaleDateString('en-GB') : 'Not yet'],
-                ['Registered', new Date(provider.created_at).toLocaleDateString('en-GB')],
-                ['Slug', provider.slug],
+                ['Location', provider.address || '—'],
+                ['Live since', provider.live_at ? new Date(provider.live_at).toLocaleDateString('en-GB') : 'Getting ready'],
+                ['Joined', new Date(provider.created_at).toLocaleDateString('en-GB')],
+                ['Profile link', `/provider/${provider.slug}`],
               ].map(([label, val]) => (
                 <div key={label}>
                   <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem' }}>{label}</div>
@@ -201,7 +240,7 @@ export default function AdminProvider() {
 
             {provider.service_categories?.length > 0 && (
               <div className="mt-2">
-                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Categories</div>
+                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Services</div>
                 <div className="flex flex-wrap gap-1">
                   {provider.service_categories.map(c => <span key={c} className="badge badge-navy">{c}</span>)}
                 </div>
@@ -210,23 +249,23 @@ export default function AdminProvider() {
 
             {provider.raw_description && (
               <div className="mt-2">
-                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Raw description</div>
+                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Original description</div>
                 <p style={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{provider.raw_description}</p>
               </div>
             )}
 
             {provider.profile_html && (
               <div className="mt-2">
-                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Profile HTML (preview)</div>
-                <div style={{ padding: '1rem', background: 'var(--gray-100)', borderRadius: '8px' }}
+                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Profile preview</div>
+                <div style={{ padding: '1rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)' }}
                   dangerouslySetInnerHTML={{ __html: provider.profile_html }} />
               </div>
             )}
 
             {provider.parsed_profile && (
               <div className="mt-2">
-                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Parsed profile (JSON)</div>
-                <pre style={{ fontSize: '0.75rem', background: 'var(--gray-100)', padding: '0.75rem', borderRadius: '8px', overflow: 'auto' }}>
+                <div style={{ color: 'var(--gray-500)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Structured profile data</div>
+                <pre style={{ fontSize: '0.75rem', background: 'var(--gray-100)', padding: '0.75rem', borderRadius: 'var(--radius)', overflow: 'auto' }}>
                   {JSON.stringify(provider.parsed_profile, null, 2)}
                 </pre>
               </div>
@@ -237,11 +276,11 @@ export default function AdminProvider() {
 
       {/* Recommendations */}
       <div className="card">
-        <h3 style={{ color: 'var(--navy)', fontSize: '1rem', marginBottom: '0.75rem' }}>
-          Recommendations ({provider.recommendations?.length || 0}/3)
+        <h3 className="section-heading">
+          Community Recommendations ({provider.recommendations?.length || 0}/3)
         </h3>
         {provider.recommendations?.map(rec => (
-          <div key={rec.id} style={{ padding: '0.75rem', background: 'var(--gray-100)', borderRadius: '8px', marginBottom: '0.5rem' }}>
+          <div key={rec.id} style={{ padding: '0.875rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)', marginBottom: '0.5rem' }}>
             <div className="flex items-center justify-between">
               <strong style={{ fontSize: '0.875rem' }}>{rec.recommender_name}</strong>
               <span className="badge badge-navy">{rec.relationship}</span>
@@ -254,7 +293,9 @@ export default function AdminProvider() {
           </div>
         ))}
         {(!provider.recommendations || provider.recommendations.length === 0) && (
-          <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>No recommendations yet.</p>
+          <div className="empty-state" style={{ padding: '1.5rem' }}>
+            <p>Waiting for community recommendations.</p>
+          </div>
         )}
       </div>
     </div>

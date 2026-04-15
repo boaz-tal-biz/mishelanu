@@ -2,6 +2,37 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
 
+// Human-readable status labels
+const STATUS_LABELS = {
+  active: 'Active',
+  suspended: 'Paused',
+  awaiting_payment: 'Payment Due',
+  deleted: 'Removed',
+};
+
+const ENRICHMENT_LABELS = {
+  pending: 'Being Prepared',
+  processed: 'Ready for Review',
+  reviewed: 'Reviewed',
+};
+
+const ALERT_LABELS = {
+  new_registration: 'New Member',
+  category_suggestion: 'Category Suggestion',
+  low_recommendations: 'Needs Recommendations',
+  renewal_due: 'Renewal Coming Up',
+};
+
+const REQUEST_STATUS_LABELS = {
+  new: 'New',
+  parsed: 'Received',
+  sent: 'Sent to Provider',
+  provider_interested: 'Provider Interested',
+  provider_declined: 'Provider Declined',
+  requester_notified: 'Connected',
+  completed: 'Completed',
+};
+
 export default function AdminDashboard() {
   const [tab, setTab] = useState('alerts');
   const [alerts, setAlerts] = useState([]);
@@ -45,27 +76,28 @@ export default function AdminDashboard() {
   if (authed === null) return null;
 
   const tabs = [
-    { key: 'alerts', label: `Alerts (${alerts.length})` },
-    { key: 'providers', label: 'Providers' },
-    { key: 'categories', label: 'Categories' },
-    { key: 'requests', label: 'Requests' },
+    { key: 'alerts', label: `Alerts (${alerts.length})`, icon: '&#x1F514;' },
+    { key: 'providers', label: 'Providers', icon: '&#x1F465;' },
+    { key: 'categories', label: 'Categories', icon: '&#x1F4C2;' },
+    { key: 'requests', label: 'Requests', icon: '&#x1F4E8;' },
   ];
 
   return (
     <div className="container">
-      <h1 style={{ color: 'var(--navy)', fontSize: '1.5rem', marginBottom: '1rem' }}>Admin Dashboard</h1>
+      <h1 style={{ color: 'var(--navy)', fontSize: '1.5rem', marginBottom: '1rem' }}>Mishelanu Dashboard</h1>
 
       {/* Tab bar */}
-      <div className="flex gap-1 mb-3" style={{ borderBottom: '1.5px solid var(--gray-200)', paddingBottom: '0.5rem' }}>
+      <div className="flex gap-1 mb-3" style={{ borderBottom: '2px solid var(--gray-200)', paddingBottom: '0.5rem' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
-              padding: '0.5rem 1rem', borderRadius: '6px 6px 0 0', border: 'none',
+              padding: '0.5rem 1.25rem', borderRadius: 'var(--radius) var(--radius) 0 0', border: 'none',
               background: tab === t.key ? 'var(--navy)' : 'transparent',
               color: tab === t.key ? 'var(--white)' : 'var(--gray-500)',
-              fontWeight: 500, fontSize: '0.875rem',
+              fontWeight: 600, fontSize: '0.875rem',
+              transition: 'all 0.15s ease',
             }}>
-            {t.label}
+            <span dangerouslySetInnerHTML={{ __html: t.icon }} /> {t.label}
           </button>
         ))}
       </div>
@@ -73,12 +105,18 @@ export default function AdminDashboard() {
       {/* Alerts */}
       {tab === 'alerts' && (
         <div>
-          {alerts.length === 0 && <p style={{ color: 'var(--gray-500)' }}>No active alerts.</p>}
+          {alerts.length === 0 && (
+            <div className="empty-state">
+              <span className="empty-emoji">&#x2705;</span>
+              <p>All clear! Mishelanu has nothing to flag right now.</p>
+            </div>
+          )}
           {alerts.map(alert => (
-            <div key={alert.id} className="card mb-2 flex items-center justify-between">
+            <div key={alert.id} className="card-flat mb-2 flex items-center justify-between" style={{ padding: '1rem 1.25rem' }}>
               <div>
-                <span className={`badge ${alert.alert_type === 'new_registration' ? 'badge-teal' : alert.alert_type === 'category_suggestion' ? 'badge-navy' : 'badge-coral'}`} style={{ marginRight: '0.5rem' }}>
-                  {alert.alert_type.replace(/_/g, ' ')}
+                <span className={`badge ${alert.alert_type === 'new_registration' ? 'badge-teal' : alert.alert_type === 'category_suggestion' ? 'badge-gold' : 'badge-coral'}`}
+                  style={{ marginRight: '0.5rem' }}>
+                  {ALERT_LABELS[alert.alert_type] || alert.alert_type}
                 </span>
                 <span style={{ fontSize: '0.875rem' }}>{alert.alert_message}</span>
                 {alert.provider_name && (
@@ -113,36 +151,36 @@ export default function AdminDashboard() {
       {tab === 'providers' && (
         <div>
           <div className="flex gap-1 mb-2 flex-wrap">
-            <input placeholder="Search..." value={filters.search}
+            <input placeholder="Search providers..." value={filters.search}
               onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              style={{ padding: '0.5rem 0.75rem', border: '1.5px solid var(--gray-200)', borderRadius: '8px', fontSize: '0.875rem' }} />
+              style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }} />
             <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-              style={{ padding: '0.5rem 0.75rem', border: '1.5px solid var(--gray-200)', borderRadius: '8px', fontSize: '0.875rem' }}>
+              style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }}>
               <option value="">All statuses</option>
               <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-              <option value="awaiting_payment">Awaiting payment</option>
+              <option value="suspended">Paused</option>
+              <option value="awaiting_payment">Payment Due</option>
             </select>
             <select value={filters.enrichment_status} onChange={e => setFilters(f => ({ ...f, enrichment_status: e.target.value }))}
-              style={{ padding: '0.5rem 0.75rem', border: '1.5px solid var(--gray-200)', borderRadius: '8px', fontSize: '0.875rem' }}>
-              <option value="">All enrichment</option>
-              <option value="pending">Pending</option>
-              <option value="processed">Processed</option>
+              style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }}>
+              <option value="">All stages</option>
+              <option value="pending">Being Prepared</option>
+              <option value="processed">Ready for Review</option>
               <option value="reviewed">Reviewed</option>
             </select>
           </div>
 
-          <div className="card" style={{ overflow: 'auto' }}>
+          <div className="card-flat" style={{ overflow: 'auto' }}>
             <table>
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Categories</th>
+                  <th>Services</th>
                   <th>Status</th>
-                  <th>Enrichment</th>
+                  <th>Profile</th>
                   <th>Recs</th>
                   <th>Visits</th>
-                  <th>Registered</th>
+                  <th>Joined</th>
                 </tr>
               </thead>
               <tbody>
@@ -160,8 +198,8 @@ export default function AdminDashboard() {
                         {(p.service_categories || []).length > 2 && <span className="badge badge-navy">+{p.service_categories.length - 2}</span>}
                       </div>
                     </td>
-                    <td><span className={`badge ${p.status === 'active' ? 'badge-teal' : 'badge-coral'}`}>{p.status}</span></td>
-                    <td><span className="badge badge-navy">{p.enrichment_status}</span></td>
+                    <td><span className={`badge ${p.status === 'active' ? 'badge-teal' : 'badge-coral'}`}>{STATUS_LABELS[p.status] || p.status}</span></td>
+                    <td><span className="badge badge-gold">{ENRICHMENT_LABELS[p.enrichment_status] || p.enrichment_status}</span></td>
                     <td>{p.recommendation_count}</td>
                     <td>{p.total_visits}</td>
                     <td style={{ fontSize: '0.8125rem' }}>{new Date(p.created_at).toLocaleDateString('en-GB')}</td>
@@ -169,19 +207,24 @@ export default function AdminDashboard() {
                 ))}
               </tbody>
             </table>
-            {providers.length === 0 && <p className="text-center mt-2" style={{ color: 'var(--gray-500)' }}>No providers found.</p>}
+            {providers.length === 0 && (
+              <div className="empty-state">
+                <span className="empty-emoji">&#x1F50D;</span>
+                <p>No providers match your search.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Categories */}
       {tab === 'categories' && (
-        <div className="card">
+        <div className="card-flat">
           <table>
             <thead>
               <tr>
                 <th>Category</th>
-                <th>Subcategory</th>
+                <th>Service</th>
                 <th>Status</th>
                 <th>Suggested by</th>
                 <th></th>
@@ -190,9 +233,11 @@ export default function AdminDashboard() {
             <tbody>
               {categories.map(c => (
                 <tr key={c.id}>
-                  <td>{c.category}</td>
+                  <td style={{ fontWeight: 500 }}>{c.category}</td>
                   <td>{c.subcategory}</td>
-                  <td><span className={`badge ${c.status === 'active' ? 'badge-teal' : 'badge-coral'}`}>{c.status}</span></td>
+                  <td><span className={`badge ${c.status === 'active' ? 'badge-teal' : 'badge-gold'}`}>
+                    {c.status === 'active' ? 'Active' : 'Awaiting Approval'}
+                  </span></td>
                   <td style={{ fontSize: '0.8125rem' }}>{c.suggested_by_name || '—'}</td>
                   <td>
                     {c.status === 'pending_approval' && (
@@ -211,15 +256,15 @@ export default function AdminDashboard() {
 
       {/* Service Requests */}
       {tab === 'requests' && (
-        <div className="card" style={{ overflow: 'auto' }}>
+        <div className="card-flat" style={{ overflow: 'auto' }}>
           <table>
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Message</th>
-                <th>Service</th>
-                <th>Provider</th>
-                <th>Status</th>
+                <th>Original Message</th>
+                <th>Service Needed</th>
+                <th>Matched Provider</th>
+                <th>Progress</th>
               </tr>
             </thead>
             <tbody>
@@ -231,12 +276,17 @@ export default function AdminDashboard() {
                   </td>
                   <td>{r.parsed_service_needed}</td>
                   <td>{r.matched_provider_name || '—'}</td>
-                  <td><span className="badge badge-navy">{r.status}</span></td>
+                  <td><span className="badge badge-navy">{REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {requests.length === 0 && <p className="text-center mt-2" style={{ color: 'var(--gray-500)' }}>No service requests yet.</p>}
+          {requests.length === 0 && (
+            <div className="empty-state">
+              <span className="empty-emoji">&#x1F4EC;</span>
+              <p>No service requests yet. Use the Monitor to process community messages.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
