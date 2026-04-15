@@ -33,6 +33,70 @@ const REQUEST_STATUS_LABELS = {
   completed: 'Completed',
 };
 
+function RequestCard({ request: r }) {
+  const [expanded, setExpanded] = useState(false);
+  const statusBadgeClass = ['new', 'parsed'].includes(r.status) ? 'badge-gold'
+    : ['provider_interested', 'requester_notified', 'completed'].includes(r.status) ? 'badge-teal'
+    : r.status === 'provider_declined' ? 'badge-coral'
+    : 'badge-navy';
+
+  return (
+    <div className="card-flat mb-2" style={{ padding: '1rem 1.25rem' }}>
+      <div className="flex items-center justify-between" style={{ gap: '0.75rem' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="flex items-center gap-1" style={{ marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+            <span className={`badge ${statusBadgeClass}`}>{REQUEST_STATUS_LABELS[r.status] || r.status}</span>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
+              {new Date(r.created_at).toLocaleDateString('en-GB')}
+            </span>
+          </div>
+          <div style={{ fontWeight: 500, fontSize: '0.9375rem' }}>
+            {r.parsed_service_needed || 'Service request'}
+          </div>
+          {r.parsed_location && (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginTop: '0.125rem' }}>
+              {r.parsed_location}
+            </div>
+          )}
+        </div>
+        {r.matched_provider_name && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="btn btn-outline"
+            style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem', whiteSpace: 'nowrap' }}
+          >
+            {expanded ? 'Hide details' : 'View match'}
+          </button>
+        )}
+      </div>
+
+      {expanded && r.matched_provider_name && (
+        <div style={{
+          marginTop: '0.75rem',
+          paddingTop: '0.75rem',
+          borderTop: '1px solid var(--gray-200)',
+          fontSize: '0.875rem',
+        }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: '0.25rem' }}>
+            <span style={{ fontWeight: 500 }}>Matched with: {r.matched_provider_name}</span>
+            {r.matched_provider_id && (
+              <Link to={`/admin/provider/${r.matched_provider_id}`} className="btn btn-outline"
+                style={{ fontSize: '0.75rem', padding: '0.25rem 0.625rem' }}>
+                Provider profile
+              </Link>
+            )}
+          </div>
+          {r.raw_message && (
+            <div style={{ marginTop: '0.5rem', padding: '0.625rem 0.875rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)', fontSize: '0.8125rem', color: 'var(--gray-700)' }}>
+              {r.raw_message}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const [tab, setTab] = useState('alerts');
   const [alerts, setAlerts] = useState([]);
@@ -256,31 +320,10 @@ export default function AdminDashboard() {
 
       {/* Service Requests */}
       {tab === 'requests' && (
-        <div className="card-flat" style={{ overflow: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Original Message</th>
-                <th>Service Needed</th>
-                <th>Matched Provider</th>
-                <th>Progress</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map(r => (
-                <tr key={r.id}>
-                  <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{new Date(r.created_at).toLocaleDateString('en-GB')}</td>
-                  <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.raw_message}
-                  </td>
-                  <td>{r.parsed_service_needed}</td>
-                  <td>{r.matched_provider_name || '—'}</td>
-                  <td><span className="badge badge-navy">{REQUEST_STATUS_LABELS[r.status] || r.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div>
+          {requests.map(r => (
+            <RequestCard key={r.id} request={r} />
+          ))}
           {requests.length === 0 && (
             <div className="empty-state">
               <span className="empty-emoji">&#x1F4EC;</span>
