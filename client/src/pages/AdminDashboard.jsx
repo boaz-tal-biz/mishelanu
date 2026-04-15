@@ -148,7 +148,17 @@ export default function AdminDashboard() {
 
   return (
     <div className="container">
-      <h1 style={{ color: 'var(--navy)', fontSize: '1.5rem', marginBottom: '1rem' }}>Mishelanu Dashboard</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 style={{ color: 'var(--navy)', fontSize: '1.5rem' }}>Mishelanu Dashboard</h1>
+        <div className="flex gap-1">
+          <Link to="/monitor" className="btn btn-primary" style={{ fontSize: '0.875rem', padding: '0.5rem 1.25rem' }}>
+            Monitor
+          </Link>
+          <Link to="/sim/group" className="btn btn-secondary" style={{ fontSize: '0.875rem', padding: '0.5rem 1.25rem' }}>
+            Simulation
+          </Link>
+        </div>
+      </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 mb-3" style={{ borderBottom: '2px solid var(--gray-200)', paddingBottom: '0.5rem' }}>

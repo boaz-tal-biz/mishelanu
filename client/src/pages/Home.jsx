@@ -41,6 +41,12 @@ export default function Home() {
       <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem', marginTop: '3rem', fontStyle: 'italic' }}>
         B'ezrat Hashem, connecting our community one recommendation at a time.
       </p>
+
+      <div style={{ marginTop: '2rem' }}>
+        <Link to="/admin/login" className="btn btn-secondary" style={{ fontSize: '1.0625rem', padding: '0.875rem 2.25rem' }}>
+          Admin Login
+        </Link>
+      </div>
     </div>
   );
 }
