@@ -49,10 +49,17 @@ router.get('/provider/:phone/messages', async (req, res, next) => {
 });
 
 // Clear messages for a provider's simulated inbox
+// Only clear messages that are no longer actionable — keep pending provider_opportunity messages
 router.delete('/provider/:phone/messages', async (req, res, next) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
-    await pool.query(`DELETE FROM outbound_messages WHERE recipient_phone = $1`, [phone]);
+    await pool.query(
+      `DELETE FROM outbound_messages
+       WHERE recipient_phone = $1
+         AND NOT (message_type = 'provider_opportunity'
+           AND service_request_id IN (SELECT id FROM service_requests WHERE status = 'sent'))`,
+      [phone]
+    );
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -78,6 +85,7 @@ router.get('/requester/:phone/messages', async (req, res, next) => {
 });
 
 // Clear messages for a requester's simulated inbox
+// Only clear messages for completed/declined requests — keep active ones
 router.delete('/requester/:phone/messages', async (req, res, next) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
@@ -86,6 +94,7 @@ router.delete('/requester/:phone/messages', async (req, res, next) => {
         SELECT om.id FROM outbound_messages om
         JOIN service_requests sr ON om.service_request_id = sr.id
         WHERE sr.requester_phone = $1 AND om.message_type = 'requester_match'
+          AND sr.status IN ('completed', 'provider_declined', 'profile_viewed')
       )`, [phone]);
     res.json({ ok: true });
   } catch (err) {
