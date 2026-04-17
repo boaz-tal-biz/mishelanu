@@ -4,6 +4,8 @@ Last updated: 2026-04-17
 
 This document captures all product decisions, UX flows, data model changes, and build sequencing agreed during design sessions. It is the single source of truth for what is being built and why. CLAUDE.md covers the original technical scaffold; this document covers everything layered on top.
 
+**Naming convention:** Always write "Mishelanu" in English transliteration. The only exception is the logo itself, which is the Hebrew wordmark משלנו.
+
 ---
 
 ## Product Summary
@@ -146,8 +148,8 @@ No provider accounts exist. The management_token URL is the sole auth mechanism.
    - For `hearsay`: "What have you heard about their work?" replaces service fields
 
 6. **Optional opt-in** (two independent checkboxes, neither mandatory):
-   - "I'd like to register as a service provider on משלנו"
-   - "I'd like to learn more about joining משלנו as a user"
+   - "I'd like to register as a service provider on Mishelanu"
+   - "I'd like to learn more about joining Mishelanu as a user"
 
 7. **Submit** → thank-you message. If this was the 3rd recommendation, add note that the profile is being reviewed.
 
@@ -280,6 +282,23 @@ Homepage serves as landing page. Includes:
 
 ---
 
+## Recognition & Feedback System (Prompt 7 — not yet built)
+
+Two tracks with Jewish community flavour:
+
+**Provider recognition:**
+- Provider of the Month — based on recommendation count, response rate, positive matches
+- Milestone badges: "Community Verified" (3 recs), "Community Favourite" (10 recs), "Mazal Tov — 1 Year on Mishelanu"
+- Monthly summary: "You helped X people this month. Kol hakavod!"
+
+**User/requester recognition:**
+- "Mensch of the Month" — most active recommender or requester
+- Post-match feedback nudge (doubles as informal rating system)
+
+**Terms:** Mazal tov, Kol hakavod, Mensch, Baal HaBayit, L'chaim — Jewish, fun, communal.
+
+---
+
 ## Future Features (Noted, Not Building)
 
 ### Requester Onboarding Layer
@@ -300,3 +319,4 @@ Provider renewal payments. Design TBD — payment provider, pricing, flow.
 | 4 | Admin multi-user auth with roles | To be written after 1-3 tested |
 | 5 | Legal pages, contact page, site footer | To be written after 1-3 tested |
 | 6 | Comprehensive alert system — all types, tiering, filters | To be written after 1-4 tested |
+| 7 | Recognition & feedback system | To be written after core system stable |
