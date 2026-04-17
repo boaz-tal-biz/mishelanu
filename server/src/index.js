@@ -14,8 +14,9 @@ import recommendationsRouter from './routes/recommendations.js';
 import adminRouter from './routes/admin.js';
 import monitorRouter from './routes/monitor.js';
 import simulationRouter from './routes/simulation.js';
+import contactRouter from './routes/contact.js';
 import { runEnrichment } from './jobs/enrichment.js';
-import { checkMissingRecommendations, checkRenewalDue } from './jobs/alerts.js';
+import { checkMissingRecommendations, checkRenewalDue, checkApplicationDeadlines } from './jobs/alerts.js';
 
 dotenv.config();
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env') });
@@ -37,6 +38,7 @@ app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/monitor', monitorRouter);
 app.use('/api/sim', simulationRouter);
+app.use('/api/contact', contactRouter);
 
 // Serve React app in production
 const clientDist = path.join(__dirname, '../../client/dist');
@@ -61,6 +63,12 @@ app.listen(PORT, () => {
     console.log('Running daily alert checks...');
     checkMissingRecommendations().catch(err => console.error('Recommendation check error:', err.message));
     checkRenewalDue().catch(err => console.error('Renewal check error:', err.message));
+  });
+
+  // Application deadline check — hourly, so warnings fire shortly after lapse
+  cron.schedule('0 * * * *', () => {
+    console.log('Running application deadline check...');
+    checkApplicationDeadlines().catch(err => console.error('Deadline check error:', err.message));
   });
 
   // Also run enrichment on startup for any pending providers

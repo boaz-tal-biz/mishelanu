@@ -7,7 +7,7 @@ const router = Router();
 router.get('/:token', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT p.id, p.full_name, p.service_categories,
+      `SELECT p.id, p.first_name, p.surname, p.service_categories,
         (SELECT COUNT(*)::int FROM recommendations WHERE provider_id = p.id) AS recommendation_count
        FROM providers p WHERE p.recommendation_token = $1 AND p.status != 'deleted'`,
       [req.params.token]
@@ -19,7 +19,7 @@ router.get('/:token', async (req, res, next) => {
 
     const provider = rows[0];
     res.json({
-      provider_name: provider.full_name,
+      provider_name: `${provider.first_name} ${provider.surname}`,
       service_categories: provider.service_categories,
       recommendation_count: provider.recommendation_count,
       max_recommendations: 3,
@@ -34,7 +34,7 @@ router.get('/:token', async (req, res, next) => {
 router.post('/:token', async (req, res, next) => {
   try {
     const { rows: providers } = await pool.query(
-      `SELECT id, full_name, enrichment_status, live_at
+      `SELECT id, first_name, surname, enrichment_status, admin_approved, live_at
        FROM providers WHERE recommendation_token = $1 AND status != 'deleted'`,
       [req.params.token]
     );
@@ -45,7 +45,6 @@ router.post('/:token', async (req, res, next) => {
 
     const provider = providers[0];
 
-    // Check count
     const { rows: countRows } = await pool.query(
       `SELECT COUNT(*)::int AS count FROM recommendations WHERE provider_id = $1`,
       [provider.id]
@@ -71,10 +70,32 @@ router.post('/:token', async (req, res, next) => {
       [provider.id, recommender_name, recommender_email || null, relationship, recommendation_text]
     );
 
-    // Check if provider should go live: at least 1 recommendation + enrichment processed/reviewed
-    if (!provider.live_at && (provider.enrichment_status === 'processed' || provider.enrichment_status === 'reviewed')) {
+    const newCount = countRows[0].count + 1;
+
+    // At 3rd recommendation: create approval_ready alert for admin (no auto go-live)
+    if (newCount === 3 && !provider.live_at) {
+      const existing = await pool.query(
+        `SELECT 1 FROM admin_alerts
+         WHERE provider_id = $1 AND alert_type = 'approval_ready' AND dismissed = false
+         LIMIT 1`,
+        [provider.id]
+      );
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO admin_alerts (provider_id, alert_type, alert_message)
+           VALUES ($1, 'approval_ready', $2)`,
+          [provider.id, `${provider.first_name} ${provider.surname} has 3 recommendations — ready for your review and approval.`]
+        );
+      }
+    }
+
+    // Go-live check: enrichment processed + 3 recs + admin_approved
+    if (!provider.live_at
+        && provider.admin_approved
+        && (provider.enrichment_status === 'processed' || provider.enrichment_status === 'reviewed')
+        && newCount >= 3) {
       await pool.query(
-        `UPDATE providers SET live_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        `UPDATE providers SET live_at = NOW(), updated_at = NOW() WHERE id = $1 AND live_at IS NULL`,
         [provider.id]
       );
     }

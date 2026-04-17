@@ -40,9 +40,11 @@ export default function AdminProvider() {
       const p = await api.get(`/admin/providers/${id}`);
       setProvider(p);
       setForm({
-        full_name: p.full_name || '',
+        first_name: p.first_name || '',
+        surname: p.surname || '',
         business_name: p.business_name || '',
         address: p.address || '',
+        area_covered: p.area_covered || '',
         mobile_phone: p.mobile_phone || '',
         whatsapp_number: p.whatsapp_number || '',
         business_phone: p.business_phone || '',
@@ -51,6 +53,11 @@ export default function AdminProvider() {
         raw_external_links: p.raw_external_links || '',
         profile_html: p.profile_html || '',
         enrichment_status: p.enrichment_status || 'pending',
+        vat_number: p.vat_number || '',
+        companies_house_number: p.companies_house_number || '',
+        sole_trader_utr: p.sole_trader_utr || '',
+        years_in_business: p.years_in_business ?? '',
+        affiliations: p.affiliations || '',
       });
     } catch (err) {
       setError(err.message);
@@ -89,13 +96,20 @@ export default function AdminProvider() {
   }
 
   const EDIT_FIELD_LABELS = {
-    full_name: 'Full name',
+    first_name: 'First name',
+    surname: 'Surname',
     business_name: 'Business name',
     address: 'Location',
+    area_covered: 'Areas covered',
     mobile_phone: 'Mobile phone',
     whatsapp_number: 'WhatsApp number',
     business_phone: 'Business phone',
     email: 'Email',
+    vat_number: 'VAT number',
+    companies_house_number: 'Companies House number',
+    sole_trader_utr: 'Sole trader UTR',
+    years_in_business: 'Years in business',
+    affiliations: 'Affiliations & credentials',
   };
 
   if (error && !provider) return <div className="container mt-4" style={{ color: 'var(--coral)' }}>{error}</div>;

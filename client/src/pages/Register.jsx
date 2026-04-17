@@ -4,11 +4,14 @@ import { api } from '../hooks/useApi.js';
 export default function Register() {
   const [categories, setCategories] = useState({});
   const [form, setForm] = useState({
-    full_name: '', business_name: '', address: '',
+    first_name: '', surname: '',
+    business_name: '', address: '', area_covered: '',
     mobile_phone: '', whatsapp_same: true, whatsapp_number: '',
     business_phone: '', email: '',
     service_categories: [], other_category: '',
-    raw_description: '', raw_external_links: ''
+    raw_description: '', raw_external_links: '',
+    vat_number: '', companies_house_number: '', sole_trader_utr: '',
+    years_in_business: '', affiliations: ''
   });
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -61,6 +64,7 @@ export default function Register() {
       const body = {
         ...form,
         whatsapp_number: form.whatsapp_same ? form.mobile_phone : form.whatsapp_number,
+        years_in_business: form.years_in_business === '' ? null : Number(form.years_in_business),
         service_categories: form.other_category
           ? [...form.service_categories, `Other: ${form.other_category}`]
           : form.service_categories,
@@ -134,10 +138,17 @@ export default function Register() {
       )}
 
       <form onSubmit={handleSubmit} className="card">
-        <div className="form-group">
-          <label>Your full name *</label>
-          <input required value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-            placeholder="e.g. Sarah Cohen" />
+        <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div>
+            <label>First name *</label>
+            <input required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}
+              placeholder="Sarah" />
+          </div>
+          <div>
+            <label>Surname *</label>
+            <input required value={form.surname} onChange={e => setForm(f => ({ ...f, surname: e.target.value }))}
+              placeholder="Cohen" />
+          </div>
         </div>
 
         <div className="form-group">
@@ -150,6 +161,15 @@ export default function Register() {
           <label>Where are you based?</label>
           <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
             placeholder="e.g. Hendon, London" />
+        </div>
+
+        <div className="form-group">
+          <label>Areas covered</label>
+          <input value={form.area_covered} onChange={e => setForm(f => ({ ...f, area_covered: e.target.value }))}
+            placeholder="e.g. North London, NW4, NW11, N3 — or leave blank" />
+          <small style={{ color: 'var(--gray-500)', fontSize: '0.8125rem' }}>
+            Postcodes or area names. Mishelanu will use this to match you with local requests.
+          </small>
         </div>
 
         <div className="form-group">
@@ -291,6 +311,48 @@ export default function Register() {
           <textarea rows={3} value={form.raw_external_links}
             onChange={e => setForm(f => ({ ...f, raw_external_links: e.target.value }))}
             placeholder="Paste links to your website, Facebook, Google Business, Checkatrade, LinkedIn, or anything else." />
+        </div>
+
+        <h3 style={{ color: 'var(--navy)', fontSize: '1rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>Business details</h3>
+        <p style={{ color: 'var(--gray-500)', fontSize: '0.8125rem', marginBottom: '1rem' }}>
+          Optional — share whichever apply to you. Mishelanu uses these to verify your business.
+        </p>
+
+        <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div>
+            <label>Years in business</label>
+            <input type="number" min="0" value={form.years_in_business}
+              onChange={e => setForm(f => ({ ...f, years_in_business: e.target.value }))}
+              placeholder="e.g. 8" />
+          </div>
+          <div>
+            <label>VAT number</label>
+            <input value={form.vat_number}
+              onChange={e => setForm(f => ({ ...f, vat_number: e.target.value }))}
+              placeholder="GB123456789" />
+          </div>
+        </div>
+
+        <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div>
+            <label>Companies House number</label>
+            <input value={form.companies_house_number}
+              onChange={e => setForm(f => ({ ...f, companies_house_number: e.target.value }))}
+              placeholder="e.g. 12345678" />
+          </div>
+          <div>
+            <label>Sole trader UTR</label>
+            <input value={form.sole_trader_utr}
+              onChange={e => setForm(f => ({ ...f, sole_trader_utr: e.target.value }))}
+              placeholder="10-digit UTR" />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Affiliations and credentials</label>
+          <textarea rows={3} value={form.affiliations}
+            onChange={e => setForm(f => ({ ...f, affiliations: e.target.value }))}
+            placeholder="e.g. Gas Safe registered, SRA-regulated, NAPIT member, Law Society accredited." />
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', fontSize: '1rem', padding: '0.875rem' }}>

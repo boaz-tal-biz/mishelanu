@@ -81,24 +81,29 @@ router.get('/search', requireAdmin, async (req, res, next) => {
       const i = params.length + 1;
       params.push(`%${keyword}%`);
       conditions.push(`(
-        p.full_name ILIKE $${i}
+        p.first_name ILIKE $${i}
+        OR p.surname ILIKE $${i}
         OR p.business_name ILIKE $${i}
         OR p.raw_description ILIKE $${i}
         OR p.address ILIKE $${i}
+        OR p.area_covered ILIKE $${i}
         OR EXISTS (SELECT 1 FROM unnest(p.service_categories) AS cat WHERE cat ILIKE $${i})
       )`);
     }
 
     const { rows } = await pool.query(
-      `SELECT p.id, p.slug, p.full_name, p.business_name, p.service_categories,
-              p.address, p.mobile_phone, p.whatsapp_number,
+      `SELECT p.id, p.slug,
+              (p.first_name || ' ' || p.surname) AS full_name,
+              p.first_name, p.surname,
+              p.business_name, p.service_categories,
+              p.address, p.area_covered, p.mobile_phone, p.whatsapp_number,
               (SELECT COUNT(*)::int FROM recommendations WHERE provider_id = p.id) AS recommendation_count
        FROM providers p
        WHERE p.status = 'active' AND p.live_at IS NOT NULL
          AND (${conditions.join(' OR ')})
        ORDER BY
          (SELECT COUNT(*) FROM recommendations WHERE provider_id = p.id) DESC,
-         p.full_name
+         p.first_name, p.surname
        LIMIT 20`,
       params
     );
