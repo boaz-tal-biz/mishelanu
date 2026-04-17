@@ -19,18 +19,16 @@ export default function Header() {
       boxShadow: '0 2px 12px rgba(26, 39, 68, 0.2)',
     }}>
       <div className="container flex items-center justify-between">
-        <Link to="/" style={{
+        <Link to="/" aria-label="Mishelanu home" style={{
           color: 'var(--white)',
-          fontSize: '1.375rem',
-          fontWeight: 700,
+          fontSize: '1.875rem',
+          fontWeight: 800,
           textDecoration: 'none',
-          letterSpacing: '-0.02em',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
+          letterSpacing: '0.01em',
+          lineHeight: 1,
+          fontFamily: '"Rubik", "Heebo", system-ui, sans-serif',
         }}>
-          <span style={{ fontSize: '1.5rem' }}>&#x2721;</span>
-          Mishelanu
+          משלנו
         </Link>
 
         <nav style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>

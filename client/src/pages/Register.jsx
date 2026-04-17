@@ -1,19 +1,37 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
 
+const PAYMENT_OPTIONS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'other', label: 'Other' },
+];
+
+const BUSINESS_SIZE_OPTIONS = [
+  { value: 'small', label: 'Small (1–2 people)' },
+  { value: 'medium', label: 'Medium (up to 5 people)' },
+  { value: 'large', label: 'Large (5+ people)' },
+  { value: 'other', label: 'Other' },
+];
+
 export default function Register() {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState({});
   const [form, setForm] = useState({
     first_name: '', surname: '',
     business_name: '', address: '', area_covered: '',
     mobile_phone: '', whatsapp_same: true, whatsapp_number: '',
     business_phone: '', email: '',
-    service_categories: [], other_category: '',
+    service_categories: [],
     raw_description: '', raw_external_links: '',
     vat_number: '', companies_house_number: '', sole_trader_utr: '',
-    years_in_business: '', affiliations: ''
+    years_in_business: '',
+    payment_types: [], payment_types_other: '',
+    business_size: '', business_size_other: '',
+    affiliations: '',
   });
-  const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [catSearch, setCatSearch] = useState('');
@@ -42,11 +60,11 @@ export default function Register() {
     ? allSubcats.filter(c => c.toLowerCase().includes(catSearch.toLowerCase()))
     : [];
 
-  const showOther = catSearch.trim() && filteredCats.length === 0;
-
   function addCategory(cat) {
-    if (!form.service_categories.includes(cat)) {
-      setForm(f => ({ ...f, service_categories: [...f.service_categories, cat] }));
+    const trimmed = cat.trim();
+    if (!trimmed) return;
+    if (!form.service_categories.includes(trimmed)) {
+      setForm(f => ({ ...f, service_categories: [...f.service_categories, trimmed] }));
     }
     setCatSearch('');
     setCatDropdownOpen(false);
@@ -56,71 +74,67 @@ export default function Register() {
     setForm(f => ({ ...f, service_categories: f.service_categories.filter(c => c !== cat) }));
   }
 
+  function onCatKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const raw = catSearch.trim().replace(/,$/, '');
+      if (raw) addCategory(raw);
+    } else if (e.key === 'Backspace' && !catSearch && form.service_categories.length > 0) {
+      removeCategory(form.service_categories[form.service_categories.length - 1]);
+    }
+  }
+
+  function togglePaymentType(value) {
+    setForm(f => {
+      const has = f.payment_types.includes(value);
+      const next = has ? f.payment_types.filter(v => v !== value) : [...f.payment_types, value];
+      return {
+        ...f,
+        payment_types: next,
+        payment_types_other: next.includes('other') ? f.payment_types_other : '',
+      };
+    });
+  }
+
+  function selectBusinessSize(value) {
+    setForm(f => ({
+      ...f,
+      business_size: value,
+      business_size_other: value === 'other' ? f.business_size_other : '',
+    }));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
+
+    if (form.payment_types.includes('other') && !form.payment_types_other.trim()) {
+      setError('Please describe the other payment type, or remove the Other option.');
+      return;
+    }
+    if (form.business_size === 'other' && !form.business_size_other.trim()) {
+      setError('Please describe the other business size, or pick one of the listed sizes.');
+      return;
+    }
+
     setLoading(true);
     try {
       const body = {
         ...form,
         whatsapp_number: form.whatsapp_same ? form.mobile_phone : form.whatsapp_number,
         years_in_business: form.years_in_business === '' ? null : Number(form.years_in_business),
-        service_categories: form.other_category
-          ? [...form.service_categories, `Other: ${form.other_category}`]
-          : form.service_categories,
+        payment_types: form.payment_types.length > 0 ? form.payment_types : null,
+        payment_types_other: form.payment_types.includes('other') ? form.payment_types_other.trim() : null,
+        business_size: form.business_size || null,
+        business_size_other: form.business_size === 'other' ? form.business_size_other.trim() : null,
       };
       delete body.whatsapp_same;
-      delete body.other_category;
       const res = await api.post('/providers', body);
-      setResult(res);
+      navigate(`/provider/${res.slug}?token=${res.management_token}`, { replace: true });
     } catch (err) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
-  }
-
-  function copyToClipboard(text) {
-    navigator.clipboard.writeText(window.location.origin + text);
-  }
-
-  if (result) {
-    return (
-      <div className="container" style={{ maxWidth: '560px' }}>
-        <div className="card card-accent text-center">
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>&#x1F389;</div>
-          <h2 style={{ color: 'var(--navy)', marginBottom: '0.5rem' }}>Mazel Tov! You're registered</h2>
-          <p style={{ color: 'var(--gray-500)', marginBottom: '1.5rem' }}>
-            Mishelanu is preparing your profile. Once we've reviewed your details
-            and you have at least one community recommendation, your profile will go live.
-          </p>
-
-          <div style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
-            <label style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', fontWeight: 500 }}>Your profile link</label>
-            <div className="flex items-center gap-1">
-              <code style={{ flex: 1, padding: '0.625rem', background: 'var(--gray-100)', borderRadius: '8px', fontSize: '0.8125rem', wordBreak: 'break-all' }}>
-                {result.profile_url}
-              </code>
-              <button className="btn btn-outline" onClick={() => copyToClipboard(result.profile_url)}>Copy</button>
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'left' }}>
-            <label style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', fontWeight: 500 }}>Share this link with people who can recommend you</label>
-            <div className="flex items-center gap-1">
-              <code style={{ flex: 1, padding: '0.625rem', background: 'var(--gray-100)', borderRadius: '8px', fontSize: '0.8125rem', wordBreak: 'break-all' }}>
-                {result.recommendation_url}
-              </code>
-              <button className="btn btn-outline" onClick={() => copyToClipboard(result.recommendation_url)}>Copy</button>
-            </div>
-          </div>
-
-          <p style={{ color: 'var(--gray-500)', fontSize: '0.8125rem', marginTop: '1.25rem', fontStyle: 'italic' }}>
-            Hatzlacha! Mishelanu is rooting for you.
-          </p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -164,9 +178,9 @@ export default function Register() {
         </div>
 
         <div className="form-group">
-          <label>Areas covered</label>
+          <label>Area Covered</label>
           <input value={form.area_covered} onChange={e => setForm(f => ({ ...f, area_covered: e.target.value }))}
-            placeholder="e.g. North London, NW4, NW11, N3 — or leave blank" />
+            placeholder="e.g. North London, Hertfordshire" />
           <small style={{ color: 'var(--gray-500)', fontSize: '0.8125rem' }}>
             Postcodes or area names. Mishelanu will use this to match you with local requests.
           </small>
@@ -205,41 +219,28 @@ export default function Register() {
         <div className="form-group" ref={catRef}>
           <label>What services do you offer?</label>
 
-          {/* Selected categories as chips */}
           {form.service_categories.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '0.5rem' }}>
               {form.service_categories.map(cat => (
-                <span key={cat} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                  padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-pill)', fontSize: '0.8125rem',
-                  background: 'var(--teal-glow)', border: '1.5px solid var(--teal)', color: 'var(--teal-dark)',
-                  fontWeight: 500,
-                }}>
-                  {cat}
-                  <button type="button" onClick={() => removeCategory(cat)}
-                    style={{ background: 'none', border: 'none', color: 'var(--teal-dark)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: 0 }}>
-                    &times;
-                  </button>
-                </span>
+                <CategoryChip key={cat} label={cat} onRemove={() => removeCategory(cat)} />
               ))}
             </div>
           )}
 
-          {/* Search input */}
           <div style={{ position: 'relative' }}>
             <input
-              placeholder="Start typing to find your services..."
+              placeholder="Type a service and press Enter or comma to add it"
               value={catSearch}
               onChange={e => { setCatSearch(e.target.value); setCatDropdownOpen(true); }}
               onFocus={() => { if (catSearch.trim()) setCatDropdownOpen(true); }}
+              onKeyDown={onCatKeyDown}
             />
 
-            {/* Dropdown */}
             {catDropdownOpen && catSearch.trim() && (
               <div style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
                 background: 'var(--white)', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)',
-                marginTop: '0.25rem', maxHeight: '200px', overflowY: 'auto',
+                marginTop: '0.25rem', maxHeight: '240px', overflowY: 'auto',
                 boxShadow: 'var(--shadow-lg)',
               }}>
                 {filteredCats.filter(c => !form.service_categories.includes(c)).map(cat => (
@@ -254,49 +255,22 @@ export default function Register() {
                     {cat}
                   </button>
                 ))}
-                {showOther && (
-                  <button type="button"
-                    onClick={() => {
-                      setForm(f => ({ ...f, other_category: catSearch.trim() }));
-                      setCatSearch('');
-                      setCatDropdownOpen(false);
-                    }}
+                {!filteredCats.some(c => c.toLowerCase() === catSearch.trim().toLowerCase()) && (
+                  <button type="button" onClick={() => addCategory(catSearch.trim())}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left',
                       padding: '0.625rem 0.875rem', border: 'none', background: 'none',
-                      fontSize: '0.875rem', cursor: 'pointer', color: 'var(--gold)', fontWeight: 600,
+                      fontSize: '0.875rem', cursor: 'pointer', color: 'var(--navy)', fontWeight: 600,
+                      borderTop: filteredCats.length > 0 ? '1px solid var(--gray-200)' : 'none',
                     }}
                     onMouseEnter={e => e.target.style.background = 'var(--gray-100)'}
                     onMouseLeave={e => e.target.style.background = 'none'}>
-                    Suggest: "{catSearch.trim()}" — we'll review and add it
+                    Add "{catSearch.trim()}" — Mishelanu will review it
                   </button>
-                )}
-                {filteredCats.length > 0 && filteredCats.every(c => form.service_categories.includes(c)) && (
-                  <div style={{ padding: '0.625rem 0.875rem', fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
-                    All matching services already selected
-                  </div>
                 )}
               </div>
             )}
           </div>
-
-          {/* Show "Other" if manually set */}
-          {form.other_category && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginTop: '0.5rem' }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-pill)', fontSize: '0.8125rem',
-                background: 'var(--gold-light)', border: '1.5px solid var(--gold)', color: '#b87d1a',
-                fontWeight: 500,
-              }}>
-                Suggested: {form.other_category}
-                <button type="button" onClick={() => setForm(f => ({ ...f, other_category: '' }))}
-                  style={{ background: 'none', border: 'none', color: '#b87d1a', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: 0 }}>
-                  &times;
-                </button>
-              </span>
-            </div>
-          )}
         </div>
 
         <div className="form-group">
@@ -313,20 +287,20 @@ export default function Register() {
             placeholder="Paste links to your website, Facebook, Google Business, Checkatrade, LinkedIn, or anything else." />
         </div>
 
-        <h3 style={{ color: 'var(--navy)', fontSize: '1rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>Business details</h3>
+        <h3 style={{ color: 'var(--navy)', fontSize: '1rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>Business Credentials</h3>
         <p style={{ color: 'var(--gray-500)', fontSize: '0.8125rem', marginBottom: '1rem' }}>
           Optional — share whichever apply to you. Mishelanu uses these to verify your business.
         </p>
 
         <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
           <div>
-            <label>Years in business</label>
+            <label>Years in Business</label>
             <input type="number" min="0" value={form.years_in_business}
               onChange={e => setForm(f => ({ ...f, years_in_business: e.target.value }))}
               placeholder="e.g. 8" />
           </div>
           <div>
-            <label>VAT number</label>
+            <label>UK VAT Number</label>
             <input value={form.vat_number}
               onChange={e => setForm(f => ({ ...f, vat_number: e.target.value }))}
               placeholder="GB123456789" />
@@ -335,13 +309,13 @@ export default function Register() {
 
         <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
           <div>
-            <label>Companies House number</label>
+            <label>Companies House Registration Number</label>
             <input value={form.companies_house_number}
               onChange={e => setForm(f => ({ ...f, companies_house_number: e.target.value }))}
               placeholder="e.g. 12345678" />
           </div>
           <div>
-            <label>Sole trader UTR</label>
+            <label>Sole Trader UTR</label>
             <input value={form.sole_trader_utr}
               onChange={e => setForm(f => ({ ...f, sole_trader_utr: e.target.value }))}
               placeholder="10-digit UTR" />
@@ -349,16 +323,173 @@ export default function Register() {
         </div>
 
         <div className="form-group">
-          <label>Affiliations and credentials</label>
+          <label>Payments Accepted</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem', marginTop: '0.25rem' }}>
+            {PAYMENT_OPTIONS.map(opt => (
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 400, fontSize: '0.875rem', cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.payment_types.includes(opt.value)}
+                  onChange={() => togglePaymentType(opt.value)}
+                  style={{ margin: 0 }}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          {form.payment_types.includes('other') && (
+            <input
+              value={form.payment_types_other}
+              onChange={e => setForm(f => ({ ...f, payment_types_other: e.target.value }))}
+              placeholder="Describe the other payment type"
+              style={{ marginTop: '0.5rem' }}
+            />
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Size of Business</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+            {BUSINESS_SIZE_OPTIONS.map(opt => (
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 400, fontSize: '0.875rem', cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="radio"
+                  name="business_size"
+                  checked={form.business_size === opt.value}
+                  onChange={() => selectBusinessSize(opt.value)}
+                  style={{ margin: 0 }}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          {form.business_size === 'other' && (
+            <input
+              value={form.business_size_other}
+              onChange={e => setForm(f => ({ ...f, business_size_other: e.target.value }))}
+              placeholder="Describe your business size"
+              style={{ marginTop: '0.5rem' }}
+            />
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Affiliations &amp; Credentials</label>
           <textarea rows={3} value={form.affiliations}
             onChange={e => setForm(f => ({ ...f, affiliations: e.target.value }))}
-            placeholder="e.g. Gas Safe registered, SRA-regulated, NAPIT member, Law Society accredited." />
+            placeholder="e.g. Federation of Master Builders, Gas Safe registered" />
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', fontSize: '1rem', padding: '0.875rem' }}>
           {loading ? 'Mishelanu is setting things up...' : 'Join Mishelanu'}
         </button>
       </form>
+
+      <ContactBlock />
+    </div>
+  );
+}
+
+function CategoryChip({ label, onRemove }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+      padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-pill)', fontSize: '0.8125rem',
+      background: 'var(--teal)', color: 'var(--white)', fontWeight: 500,
+    }}>
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        aria-label={`Remove ${label}`}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: hover ? 'var(--coral)' : 'var(--white)',
+          fontSize: '1rem', lineHeight: 1, padding: 0,
+          transition: 'color 0.15s ease',
+        }}
+      >
+        &times;
+      </button>
+    </span>
+  );
+}
+
+function ContactBlock() {
+  const [open, setOpen] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [contact, setContact] = useState({ name: '', email: '', phone: '', message: '' });
+  const [contactError, setContactError] = useState(null);
+  const [contactLoading, setContactLoading] = useState(false);
+
+  async function send(e) {
+    e.preventDefault();
+    setContactError(null);
+    setContactLoading(true);
+    try {
+      await api.post('/contact', { ...contact });
+      setSubmitted(true);
+    } catch (err) {
+      setContactError(err.message);
+    } finally {
+      setContactLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+      {!open && !submitted && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="btn btn-outline"
+          style={{ fontSize: '0.875rem' }}
+        >
+          Questions? Contact Mishelanu
+        </button>
+      )}
+
+      {open && !submitted && (
+        <form onSubmit={send} className="card" style={{ marginTop: '1rem', textAlign: 'left' }}>
+          <h3 style={{ color: 'var(--navy)', fontSize: '1rem', marginBottom: '0.75rem' }}>Send Mishelanu a message</h3>
+          {contactError && <div className="msg-error" style={{ marginBottom: '0.75rem' }}>{contactError}</div>}
+          <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <label>Your name *</label>
+              <input required value={contact.name} onChange={e => setContact(c => ({ ...c, name: e.target.value }))} />
+            </div>
+            <div>
+              <label>Email *</label>
+              <input required type="email" value={contact.email} onChange={e => setContact(c => ({ ...c, email: e.target.value }))} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Phone (optional)</label>
+            <input type="tel" value={contact.phone} onChange={e => setContact(c => ({ ...c, phone: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label>Message *</label>
+            <textarea required rows={4} value={contact.message} onChange={e => setContact(c => ({ ...c, message: e.target.value }))} />
+          </div>
+          <div className="flex gap-1">
+            <button type="submit" disabled={contactLoading} className="btn btn-primary" style={{ flex: 1 }}>
+              {contactLoading ? 'Sending...' : 'Send to Mishelanu'}
+            </button>
+            <button type="button" className="btn btn-outline" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {submitted && (
+        <div className="card card-accent" style={{ marginTop: '1rem' }}>
+          <p style={{ color: 'var(--navy)', fontWeight: 500 }}>
+            Toda raba — Mishelanu has received your message and will be in touch soon.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

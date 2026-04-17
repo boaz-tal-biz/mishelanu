@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
 
-// Human-readable status labels
 const STATUS_LABELS = {
   active: 'Active',
   suspended: 'Paused',
@@ -19,8 +18,25 @@ const ENRICHMENT_LABELS = {
 const ALERT_LABELS = {
   new_registration: 'New Member',
   category_suggestion: 'Category Suggestion',
-  low_recommendations: 'Needs Recommendations',
+  approval_ready: 'Approval Ready',
+  provider_ping: 'Provider Ping',
+  contact_message: 'Contact Message',
+  application_expired: 'Application Expired',
+  deadline_warning: 'Deadline Warning',
+  missing_recommendations: 'Needs Recommendations',
   renewal_due: 'Renewal Coming Up',
+};
+
+const ALERT_BADGE_CLASS = {
+  new_registration: 'badge-teal',
+  approval_ready: 'badge-teal',
+  category_suggestion: 'badge-gold',
+  provider_ping: 'badge-gold',
+  contact_message: 'badge-navy',
+  application_expired: 'badge-coral',
+  deadline_warning: 'badge-coral',
+  missing_recommendations: 'badge-coral',
+  renewal_due: 'badge-gold',
 };
 
 const REQUEST_STATUS_LABELS = {
@@ -31,6 +47,20 @@ const REQUEST_STATUS_LABELS = {
   provider_declined: 'Provider Declined',
   requester_notified: 'Connected',
   completed: 'Completed',
+};
+
+const CAT_STATUS_BADGE_STYLE = {
+  suggested: { background: 'var(--gold-light, #fff4d6)', color: '#8a6200', border: '1px solid var(--gold, #d4a017)' },
+  active: { background: 'var(--teal-glow, #d8f3ed)', color: 'var(--teal-dark, #1a8773)', border: '1px solid var(--teal)' },
+  deactivated: { background: '#ececec', color: '#666', border: '1px solid #c7c7c7' },
+  pending_approval: { background: 'var(--gold-light, #fff4d6)', color: '#8a6200', border: '1px solid var(--gold, #d4a017)' },
+};
+
+const CAT_STATUS_LABEL = {
+  suggested: 'Suggested',
+  active: 'Active',
+  deactivated: 'Deactivated',
+  pending_approval: 'Suggested',
 };
 
 function RequestCard({ request: r }) {
@@ -113,9 +143,12 @@ export default function AdminDashboard() {
       .catch(() => navigate('/admin/login'));
   }, [navigate]);
 
+  const reloadAlerts = () => api.get('/admin/alerts').then(setAlerts).catch(() => {});
+  const reloadCategories = () => api.get('/admin/categories').then(setCategories).catch(() => {});
+
   useEffect(() => {
     if (!authed) return;
-    if (tab === 'alerts') api.get('/admin/alerts').then(setAlerts).catch(() => {});
+    if (tab === 'alerts') reloadAlerts();
     if (tab === 'providers') {
       const params = new URLSearchParams();
       if (filters.status) params.set('status', filters.status);
@@ -123,7 +156,7 @@ export default function AdminDashboard() {
       if (filters.search) params.set('search', filters.search);
       api.get(`/admin/providers?${params}`).then(setProviders).catch(() => {});
     }
-    if (tab === 'categories') api.get('/admin/categories').then(setCategories).catch(() => {});
+    if (tab === 'categories') reloadCategories();
     if (tab === 'requests') api.get('/admin/requests').then(setRequests).catch(() => {});
   }, [authed, tab, filters]);
 
@@ -132,9 +165,12 @@ export default function AdminDashboard() {
     setAlerts(a => a.filter(al => al.id !== id));
   }
 
-  async function approveCategory(id) {
-    await api.post(`/admin/categories/${id}/approve`);
-    setCategories(c => c.map(cat => cat.id === id ? { ...cat, status: 'active' } : cat));
+  async function approveProvider(providerId, alertId) {
+    await api.post(`/admin/providers/${providerId}/approve`);
+    if (alertId) {
+      await api.post(`/admin/alerts/${alertId}/dismiss`);
+      setAlerts(a => a.filter(al => al.id !== alertId));
+    }
   }
 
   if (authed === null) return null;
@@ -160,7 +196,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="flex gap-1 mb-3" style={{ borderBottom: '2px solid var(--gray-200)', paddingBottom: '0.5rem' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -176,159 +211,27 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* Alerts */}
       {tab === 'alerts' && (
-        <div>
-          {alerts.length === 0 && (
-            <div className="empty-state">
-              <span className="empty-emoji">&#x2705;</span>
-              <p>All clear! Mishelanu has nothing to flag right now.</p>
-            </div>
-          )}
-          {alerts.map(alert => (
-            <div key={alert.id} className="card-flat mb-2 flex items-center justify-between" style={{ padding: '1rem 1.25rem' }}>
-              <div>
-                <span className={`badge ${alert.alert_type === 'new_registration' ? 'badge-teal' : alert.alert_type === 'category_suggestion' ? 'badge-gold' : 'badge-coral'}`}
-                  style={{ marginRight: '0.5rem' }}>
-                  {ALERT_LABELS[alert.alert_type] || alert.alert_type}
-                </span>
-                <span style={{ fontSize: '0.875rem' }}>{alert.alert_message}</span>
-                {alert.provider_name && (
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginLeft: '0.5rem' }}>
-                    — {alert.provider_name}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-1">
-                {alert.provider_id && (
-                  <Link to={`/admin/provider/${alert.provider_id}`} className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>
-                    View
-                  </Link>
-                )}
-                {alert.alert_type === 'category_suggestion' && alert.metadata?.category_id && (
-                  <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
-                    onClick={() => approveCategory(alert.metadata.category_id)}>
-                    Approve
-                  </button>
-                )}
-                <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
-                  onClick={() => dismissAlert(alert.id)}>
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <AlertsTab
+          alerts={alerts}
+          dismissAlert={dismissAlert}
+          approveProvider={approveProvider}
+        />
       )}
 
-      {/* Providers */}
       {tab === 'providers' && (
-        <div>
-          <div className="flex gap-1 mb-2 flex-wrap">
-            <input placeholder="Search providers..." value={filters.search}
-              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }} />
-            <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-              style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }}>
-              <option value="">All statuses</option>
-              <option value="active">Active</option>
-              <option value="suspended">Paused</option>
-              <option value="awaiting_payment">Payment Due</option>
-            </select>
-            <select value={filters.enrichment_status} onChange={e => setFilters(f => ({ ...f, enrichment_status: e.target.value }))}
-              style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }}>
-              <option value="">All stages</option>
-              <option value="pending">Being Prepared</option>
-              <option value="processed">Ready for Review</option>
-              <option value="reviewed">Reviewed</option>
-            </select>
-          </div>
-
-          <div className="card-flat" style={{ overflow: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Services</th>
-                  <th>Status</th>
-                  <th>Profile</th>
-                  <th>Recs</th>
-                  <th>Visits</th>
-                  <th>Joined</th>
-                </tr>
-              </thead>
-              <tbody>
-                {providers.map(p => (
-                  <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/admin/provider/${p.id}`)}>
-                    <td>
-                      <strong>{p.full_name}</strong>
-                      {p.business_name && <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{p.business_name}</div>}
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-1">
-                        {(p.service_categories || []).slice(0, 2).map(c => (
-                          <span key={c} className="badge badge-navy">{c.split(': ').pop()}</span>
-                        ))}
-                        {(p.service_categories || []).length > 2 && <span className="badge badge-navy">+{p.service_categories.length - 2}</span>}
-                      </div>
-                    </td>
-                    <td><span className={`badge ${p.status === 'active' ? 'badge-teal' : 'badge-coral'}`}>{STATUS_LABELS[p.status] || p.status}</span></td>
-                    <td><span className="badge badge-gold">{ENRICHMENT_LABELS[p.enrichment_status] || p.enrichment_status}</span></td>
-                    <td>{p.recommendation_count}</td>
-                    <td>{p.total_visits}</td>
-                    <td style={{ fontSize: '0.8125rem' }}>{new Date(p.created_at).toLocaleDateString('en-GB')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {providers.length === 0 && (
-              <div className="empty-state">
-                <span className="empty-emoji">&#x1F50D;</span>
-                <p>No providers match your search.</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <ProvidersTab
+          providers={providers}
+          filters={filters}
+          setFilters={setFilters}
+          navigate={navigate}
+        />
       )}
 
-      {/* Categories */}
       {tab === 'categories' && (
-        <div className="card-flat">
-          <table>
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Service</th>
-                <th>Status</th>
-                <th>Suggested by</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map(c => (
-                <tr key={c.id}>
-                  <td style={{ fontWeight: 500 }}>{c.category}</td>
-                  <td>{c.subcategory}</td>
-                  <td><span className={`badge ${c.status === 'active' ? 'badge-teal' : 'badge-gold'}`}>
-                    {c.status === 'active' ? 'Active' : 'Awaiting Approval'}
-                  </span></td>
-                  <td style={{ fontSize: '0.8125rem' }}>{c.suggested_by_name || '—'}</td>
-                  <td>
-                    {c.status === 'pending_approval' && (
-                      <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
-                        onClick={() => approveCategory(c.id)}>
-                        Approve
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <CategoriesTab categories={categories} reload={reloadCategories} />
       )}
 
-      {/* Service Requests */}
       {tab === 'requests' && (
         <div>
           {requests.map(r => (
@@ -343,5 +246,393 @@ export default function AdminDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Alerts tab
+// ────────────────────────────────────────────────────────────────────────────
+function AlertsTab({ alerts, dismissAlert, approveProvider }) {
+  if (alerts.length === 0) {
+    return (
+      <div className="empty-state">
+        <span className="empty-emoji">&#x2705;</span>
+        <p>All clear! Mishelanu has nothing to flag right now.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {alerts.map(alert => (
+        <AlertCard
+          key={alert.id}
+          alert={alert}
+          onDismiss={() => dismissAlert(alert.id)}
+          onApproveProvider={(pid) => approveProvider(pid, alert.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AlertCard({ alert, onDismiss, onApproveProvider }) {
+  const badgeClass = ALERT_BADGE_CLASS[alert.alert_type] || 'badge-navy';
+  const label = ALERT_LABELS[alert.alert_type] || alert.alert_type;
+  const meta = alert.metadata || {};
+
+  return (
+    <div className="card-flat mb-2" style={{ padding: '1rem 1.25rem' }}>
+      <div className="flex items-center justify-between" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ marginBottom: '0.25rem' }}>
+            <span className={`badge ${badgeClass}`} style={{ marginRight: '0.5rem' }}>{label}</span>
+            <span style={{ fontSize: '0.875rem' }}>{alert.alert_message}</span>
+            {alert.provider_name && (
+              <span style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginLeft: '0.5rem' }}>
+                — {alert.provider_name}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+            {new Date(alert.created_at).toLocaleString('en-GB')}
+          </div>
+          {alert.alert_type === 'contact_message' && (
+            <div style={{ marginTop: '0.625rem', padding: '0.625rem 0.875rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)', fontSize: '0.8125rem', color: 'var(--gray-700)' }}>
+              <div style={{ marginBottom: '0.25rem' }}>
+                <strong>{meta.name || 'Anonymous'}</strong>
+                {' · '}
+                {meta.email && <a href={`mailto:${meta.email}`} style={{ color: 'var(--navy)' }}>{meta.email}</a>}
+                {meta.phone && <span> · {meta.phone}</span>}
+              </div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{meta.message}</div>
+              {meta.provider_slug && (
+                <div style={{ marginTop: '0.375rem', fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+                  About provider: <Link to={`/provider/${meta.provider_slug}`} style={{ color: 'var(--navy)' }}>{meta.provider_slug}</Link>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-1" style={{ flexShrink: 0 }}>
+          {alert.alert_type === 'approval_ready' && alert.provider_id && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
+              onClick={() => onApproveProvider(alert.provider_id)}
+            >
+              Approve
+            </button>
+          )}
+          {(alert.alert_type === 'provider_ping' || alert.alert_type === 'application_expired') && alert.provider_id && (
+            <Link
+              to={`/admin/provider/${alert.provider_id}`}
+              className="btn btn-outline"
+              style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
+            >
+              View provider
+            </Link>
+          )}
+          {alert.provider_id && alert.alert_type !== 'provider_ping' && alert.alert_type !== 'application_expired' && alert.alert_type !== 'approval_ready' && alert.alert_type !== 'contact_message' && (
+            <Link to={`/admin/provider/${alert.provider_id}`} className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>
+              View
+            </Link>
+          )}
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
+            onClick={onDismiss}
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Providers tab (largely unchanged)
+// ────────────────────────────────────────────────────────────────────────────
+function ProvidersTab({ providers, filters, setFilters, navigate }) {
+  return (
+    <div>
+      <div className="flex gap-1 mb-2 flex-wrap">
+        <input placeholder="Search providers..." value={filters.search}
+          onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+          style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }} />
+        <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
+          style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }}>
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="suspended">Paused</option>
+          <option value="awaiting_payment">Payment Due</option>
+        </select>
+        <select value={filters.enrichment_status} onChange={e => setFilters(f => ({ ...f, enrichment_status: e.target.value }))}
+          style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }}>
+          <option value="">All stages</option>
+          <option value="pending">Being Prepared</option>
+          <option value="processed">Ready for Review</option>
+          <option value="reviewed">Reviewed</option>
+        </select>
+      </div>
+
+      <div className="card-flat" style={{ overflow: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Services</th>
+              <th>Status</th>
+              <th>Profile</th>
+              <th>Recs</th>
+              <th>Visits</th>
+              <th>Joined</th>
+            </tr>
+          </thead>
+          <tbody>
+            {providers.map(p => (
+              <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/admin/provider/${p.id}`)}>
+                <td>
+                  <strong>{p.full_name}</strong>
+                  {p.business_name && <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{p.business_name}</div>}
+                </td>
+                <td>
+                  <div className="flex flex-wrap gap-1">
+                    {(p.service_categories || []).slice(0, 2).map(c => (
+                      <span key={c} className="badge badge-navy">{c.split(': ').pop()}</span>
+                    ))}
+                    {(p.service_categories || []).length > 2 && <span className="badge badge-navy">+{p.service_categories.length - 2}</span>}
+                  </div>
+                </td>
+                <td><span className={`badge ${p.status === 'active' ? 'badge-teal' : 'badge-coral'}`}>{STATUS_LABELS[p.status] || p.status}</span></td>
+                <td><span className="badge badge-gold">{ENRICHMENT_LABELS[p.enrichment_status] || p.enrichment_status}</span></td>
+                <td>{p.recommendation_count}</td>
+                <td>{p.total_visits}</td>
+                <td style={{ fontSize: '0.8125rem' }}>{new Date(p.created_at).toLocaleDateString('en-GB')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {providers.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-emoji">&#x1F50D;</span>
+            <p>No providers match your search.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Categories tab
+// ────────────────────────────────────────────────────────────────────────────
+function CategoriesTab({ categories, reload }) {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return categories.filter(c => {
+      if (statusFilter && (c.status !== statusFilter && !(statusFilter === 'suggested' && c.status === 'pending_approval'))) return false;
+      if (!q) return true;
+      const blob = `${c.category} ${c.subcategory} ${(c.aliases || []).map(a => a.alias).join(' ')}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [categories, search, statusFilter]);
+
+  async function changeStatus(id, status) {
+    await fetchPatch(`/admin/categories/${id}/status`, { status });
+    reload();
+  }
+
+  async function addAlias(id, alias) {
+    await api.post(`/admin/categories/${id}/aliases`, { alias });
+    reload();
+  }
+
+  async function removeAlias(catId, aliasId) {
+    await api.del(`/admin/categories/${catId}/aliases/${aliasId}`);
+    reload();
+  }
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-2 flex-wrap">
+        <input
+          placeholder="Search by name or alias..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem', minWidth: '220px' }}
+        />
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          style={{ padding: '0.625rem 0.875rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.875rem' }}
+        >
+          <option value="">All statuses</option>
+          <option value="suggested">Suggested</option>
+          <option value="active">Active</option>
+          <option value="deactivated">Deactivated</option>
+        </select>
+      </div>
+
+      <div className="card-flat" style={{ overflow: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Providers</th>
+              <th>Aliases</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(c => (
+              <CategoryRow
+                key={c.id}
+                cat={c}
+                onChangeStatus={changeStatus}
+                onAddAlias={addAlias}
+                onRemoveAlias={removeAlias}
+              />
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-emoji">&#x1F4C2;</span>
+            <p>No categories match.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// PATCH not on the api helper — define locally
+async function fetchPatch(path, body) {
+  const res = await fetch(`/api${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(data.error || `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+function CategoryRow({ cat, onChangeStatus, onAddAlias, onRemoveAlias }) {
+  const [aliasInput, setAliasInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [rowError, setRowError] = useState(null);
+
+  const status = cat.status === 'pending_approval' ? 'suggested' : cat.status;
+  const statusStyle = CAT_STATUS_BADGE_STYLE[status] || CAT_STATUS_BADGE_STYLE.active;
+
+  async function run(fn) {
+    setBusy(true);
+    setRowError(null);
+    try { await fn(); } catch (err) { setRowError(err.message); } finally { setBusy(false); }
+  }
+
+  async function submitAlias(e) {
+    if (e) e.preventDefault();
+    const trimmed = aliasInput.trim();
+    if (!trimmed) return;
+    await run(() => onAddAlias(cat.id, trimmed));
+    setAliasInput('');
+  }
+
+  return (
+    <tr>
+      <td>
+        <strong style={{ fontSize: '0.875rem' }}>{cat.subcategory}</strong>
+        <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{cat.category}</div>
+      </td>
+      <td>
+        <span style={{
+          display: 'inline-block', padding: '0.2rem 0.625rem',
+          borderRadius: 'var(--radius-pill)', fontSize: '0.75rem', fontWeight: 600,
+          ...statusStyle,
+        }}>
+          {CAT_STATUS_LABEL[status] || status}
+        </span>
+      </td>
+      <td style={{ fontSize: '0.875rem' }}>{cat.provider_count ?? 0}</td>
+      <td style={{ minWidth: '260px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginBottom: '0.375rem' }}>
+          {(cat.aliases || []).map(a => (
+            <AliasChip key={a.id} alias={a.alias} onRemove={() => run(() => onRemoveAlias(cat.id, a.id))} />
+          ))}
+        </div>
+        <form onSubmit={submitAlias} style={{ display: 'flex', gap: '0.25rem' }}>
+          <input
+            value={aliasInput}
+            onChange={e => setAliasInput(e.target.value)}
+            placeholder="Add alias and press Enter"
+            disabled={busy}
+            style={{ flex: 1, padding: '0.375rem 0.625rem', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}
+          />
+        </form>
+        {rowError && <div style={{ color: 'var(--coral)', fontSize: '0.75rem', marginTop: '0.25rem' }}>{rowError}</div>}
+      </td>
+      <td>
+        <div className="flex gap-1" style={{ flexWrap: 'wrap' }}>
+          {status === 'suggested' && (
+            <>
+              <button type="button" disabled={busy} className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                onClick={() => run(() => onChangeStatus(cat.id, 'active'))}>Approve</button>
+              <button type="button" disabled={busy} className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                onClick={() => run(() => onChangeStatus(cat.id, 'deactivated'))}>Reject</button>
+            </>
+          )}
+          {status === 'active' && (
+            <button type="button" disabled={busy} className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+              onClick={() => run(() => onChangeStatus(cat.id, 'deactivated'))}>Deactivate</button>
+          )}
+          {status === 'deactivated' && (
+            <button type="button" disabled={busy} className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+              onClick={() => run(() => onChangeStatus(cat.id, 'active'))}>Reactivate</button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function AliasChip({ alias, onRemove }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+      padding: '0.2rem 0.55rem', borderRadius: 'var(--radius-pill)', fontSize: '0.75rem',
+      background: 'var(--teal)', color: 'var(--white)', fontWeight: 500,
+    }}>
+      {alias}
+      <button
+        type="button"
+        onClick={onRemove}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        aria-label={`Remove alias ${alias}`}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: hover ? 'var(--coral)' : 'var(--white)',
+          fontSize: '0.875rem', lineHeight: 1, padding: 0,
+          transition: 'color 0.15s ease',
+        }}
+      >
+        &times;
+      </button>
+    </span>
   );
 }

@@ -68,7 +68,11 @@ router.get('/categories', requireAdmin, async (req, res, next) => {
                 (SELECT json_agg(json_build_object('id', a.id, 'alias', a.alias) ORDER BY a.alias)
                  FROM category_aliases a WHERE a.category_id = c.id),
                 '[]'::json
-              ) AS aliases
+              ) AS aliases,
+              (SELECT COUNT(*)::int FROM providers pr
+                 WHERE c.subcategory = ANY(pr.service_categories)
+                    OR (c.category || ': ' || c.subcategory) = ANY(pr.service_categories)
+              ) AS provider_count
        FROM service_categories_registry c
        LEFT JOIN providers p ON c.suggested_by_provider_id = p.id
        ${where}

@@ -226,8 +226,9 @@ router.get('/:slug/manage', async (req, res, next) => {
     const p = await loadProviderByManagementToken(req.params.slug, req.query.token);
     if (!p) return res.status(403).json({ error: 'Invalid management link.' });
 
-    const { rows: recCount } = await pool.query(
-      `SELECT COUNT(*)::int AS count FROM recommendations WHERE provider_id = $1`,
+    const { rows: recRows } = await pool.query(
+      `SELECT recommender_name, relationship, recommendation_text, created_at
+       FROM recommendations WHERE provider_id = $1 ORDER BY created_at`,
       [p.id]
     );
 
@@ -236,6 +237,7 @@ router.get('/:slug/manage', async (req, res, next) => {
       slug: p.slug,
       first_name: p.first_name,
       surname: p.surname,
+      full_name: `${p.first_name} ${p.surname}`,
       business_name: p.business_name,
       email: p.email,
       mobile_phone: p.mobile_phone,
@@ -256,6 +258,7 @@ router.get('/:slug/manage', async (req, res, next) => {
       raw_description: p.raw_description,
       raw_external_links: p.raw_external_links,
       profile_html: p.profile_html,
+      parsed_profile: p.parsed_profile,
       status: p.status,
       enrichment_status: p.enrichment_status,
       application_deadline: p.application_deadline,
@@ -266,7 +269,9 @@ router.get('/:slug/manage', async (req, res, next) => {
       admin_approved_at: p.admin_approved_at,
       live_at: p.live_at,
       recommendation_token: p.recommendation_token,
-      recommendation_count: recCount[0].count,
+      recommendation_count: recRows.length,
+      recommendations: recRows,
+      verified: recRows.length >= 3,
       created_at: p.created_at
     });
   } catch (err) {
