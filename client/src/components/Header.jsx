@@ -20,15 +20,27 @@ export default function Header() {
     }}>
       <div className="container flex items-center justify-between">
         <Link to="/" aria-label="Mishelanu home" style={{
-          color: 'var(--white)',
-          fontSize: '1.875rem',
-          fontWeight: 800,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
           textDecoration: 'none',
-          letterSpacing: '0.01em',
-          lineHeight: 1,
-          fontFamily: '"Rubik", "Heebo", system-ui, sans-serif',
         }}>
-          משלנו
+          <img
+            src="/assets/mishelanu-logo-sm.png"
+            alt="Mishelanu"
+            height={40}
+            style={{ display: 'block' }}
+          />
+          <span style={{
+            color: 'var(--white)',
+            fontSize: '1.5rem',
+            fontWeight: 800,
+            letterSpacing: '0.01em',
+            lineHeight: 1,
+            fontFamily: '"Rubik", "Heebo", system-ui, sans-serif',
+          }}>
+            Mishelanu
+          </span>
         </Link>
 
         <nav style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
