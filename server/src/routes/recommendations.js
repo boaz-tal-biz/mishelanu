@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { createAlertSafe } from '../services/alerts.js';
 
 const router = Router();
 
@@ -139,52 +140,64 @@ router.post('/:token', async (req, res, next) => {
     );
     const recommendationId = inserted[0].id;
 
-    // Opt-in alert is created BEFORE any later scrub touches contact data.
-    // The alert metadata captures the contact details at recommendation time so
-    // admin still has them after the post-approval scrub runs.
-    if (optProvider || optUser) {
-      const interests = [];
-      if (optProvider) interests.push('register as a service provider');
-      if (optUser) interests.push('join as a user');
-
-      await pool.query(
-        `INSERT INTO admin_alerts (provider_id, alert_type, alert_message, metadata)
-         VALUES ($1, 'opt_in_interest', $2, $3)`,
-        [
-          provider.id,
-          `${cleanFirst} ${cleanSurname} (recommender for ${provider.first_name} ${provider.surname}) wants to ${interests.join(' and ')}.`,
-          JSON.stringify({
-            recommendation_id: recommendationId,
-            recommender_first_name: cleanFirst,
-            recommender_surname: cleanSurname,
-            recommender_email: cleanEmail,
-            recommender_phone: cleanPhone,
-            opt_in_provider: optProvider,
-            opt_in_user: optUser,
-            provider_first_name: provider.first_name,
-            provider_surname: provider.surname,
-          }),
-        ]
-      );
+    // Opt-in alerts created BEFORE any later scrub touches contact data.
+    const optMeta = {
+      recommendation_id: recommendationId,
+      recommender_first_name: cleanFirst,
+      recommender_surname: cleanSurname,
+      recommender_email: cleanEmail,
+      recommender_phone: cleanPhone,
+      provider_first_name: provider.first_name,
+      provider_surname: provider.surname,
+    };
+    if (optProvider) {
+      await createAlertSafe({
+        type: 'opt_in_provider',
+        providerId: provider.id,
+        recommendationId,
+        message: `${cleanFirst} ${cleanSurname} (recommender for ${provider.first_name} ${provider.surname}) wants to register as a service provider.`,
+        metadata: optMeta,
+      });
+    }
+    if (optUser) {
+      await createAlertSafe({
+        type: 'opt_in_user',
+        providerId: provider.id,
+        recommendationId,
+        message: `${cleanFirst} ${cleanSurname} (recommender for ${provider.first_name} ${provider.surname}) wants to join as a user.`,
+        metadata: optMeta,
+      });
     }
 
     const newCount = countRows[0].count + 1;
 
-    // At 3rd recommendation: create approval_ready alert (no auto go-live).
+    // Recommendation received alert
+    await createAlertSafe({
+      type: 'recommendation_received',
+      providerId: provider.id,
+      recommendationId,
+      message: `${cleanFirst} ${cleanSurname} recommended ${provider.first_name} ${provider.surname} (${newCount} of 3).`,
+      metadata: { count: newCount, total_needed: 3 },
+    });
+
+    // Hearsay flag
+    if (relationship_type === 'hearsay') {
+      await createAlertSafe({
+        type: 'hearsay_recommendation',
+        providerId: provider.id,
+        recommendationId,
+        message: `Hearsay recommendation from ${cleanFirst} ${cleanSurname} for ${provider.first_name} ${provider.surname}.`,
+        metadata: { relationship_type },
+      });
+    }
+
+    // At 3rd recommendation: approval_ready (dedup handled by createAlert)
     if (newCount === 3 && !provider.live_at) {
-      const existing = await pool.query(
-        `SELECT 1 FROM admin_alerts
-         WHERE provider_id = $1 AND alert_type = 'approval_ready' AND dismissed = false
-         LIMIT 1`,
-        [provider.id]
-      );
-      if (existing.rows.length === 0) {
-        await pool.query(
-          `INSERT INTO admin_alerts (provider_id, alert_type, alert_message)
-           VALUES ($1, 'approval_ready', $2)`,
-          [provider.id, `${provider.first_name} ${provider.surname} has 3 recommendations — ready for your review and approval.`]
-        );
-      }
+      await createAlertSafe({
+        type: 'approval_ready',
+        providerId: provider.id,
+        message: `${provider.first_name} ${provider.surname} has 3 recommendations — ready for your review and approval.`,
+      });
     }
 
     // Go-live check: enrichment processed + admin_approved.

@@ -3,6 +3,7 @@ import { requireAdmin } from '../middleware/auth.js';
 import pool from '../db/pool.js';
 import PDFDocument from 'pdfkit';
 import { scrubRecommenderDetails } from '../services/recommendations.js';
+import { createAlertSafe } from '../services/alerts.js';
 
 const router = Router();
 
@@ -10,26 +11,39 @@ const router = Router();
 
 router.get('/alerts', requireAdmin, async (req, res, next) => {
   try {
+    const { tier, type, is_resolved, provider_id, from, to, page, limit: lim } = req.query;
+    const where = [];
+    const params = [];
+    let i = 1;
+
+    if (tier) { where.push(`a.tier = $${i++}`); params.push(tier); }
+    if (type) { where.push(`a.type = $${i++}`); params.push(type); }
+    if (provider_id) { where.push(`a.provider_id = $${i++}`); params.push(provider_id); }
+    if (from) { where.push(`a.created_at >= $${i++}`); params.push(from); }
+    if (to) { where.push(`a.created_at <= $${i++}`); params.push(to); }
+
+    // Default: unresolved only
+    const showResolved = is_resolved === 'true' || is_resolved === 'all';
+    if (is_resolved === 'true') {
+      where.push(`a.is_resolved = true`);
+    } else if (is_resolved !== 'all') {
+      where.push(`a.is_resolved = false`);
+    }
+
+    const limit = Math.min(parseInt(lim) || 50, 200);
+    const offset = ((parseInt(page) || 1) - 1) * limit;
+
+    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
     const { rows } = await pool.query(
       `SELECT a.*,
          (p.first_name || ' ' || p.surname) AS provider_name
        FROM admin_alerts a
        LEFT JOIN providers p ON a.provider_id = p.id
-       WHERE a.dismissed = false
-       ORDER BY
-         CASE a.alert_type
-           WHEN 'approval_ready' THEN 1
-           WHEN 'new_registration' THEN 2
-           WHEN 'provider_ping' THEN 3
-           WHEN 'contact_message' THEN 4
-           WHEN 'deadline_warning' THEN 5
-           WHEN 'application_expired' THEN 6
-           WHEN 'category_suggestion' THEN 7
-           WHEN 'missing_recommendations' THEN 8
-           WHEN 'renewal_due' THEN 9
-           ELSE 10
-         END,
-         a.created_at DESC`
+       ${whereClause}
+       ORDER BY a.created_at DESC
+       LIMIT $${i++} OFFSET $${i++}`,
+      [...params, limit, offset]
     );
     res.json(rows);
   } catch (err) {
@@ -37,10 +51,104 @@ router.get('/alerts', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.post('/alerts/:id/dismiss', requireAdmin, async (req, res, next) => {
+router.get('/alerts/counts', requireAdmin, async (req, res, next) => {
   try {
-    await pool.query(`UPDATE admin_alerts SET dismissed = true WHERE id = $1`, [req.params.id]);
+    const { rows } = await pool.query(
+      `SELECT tier, COUNT(*)::int AS count
+       FROM admin_alerts
+       WHERE is_resolved = false
+       GROUP BY tier`
+    );
+    const counts = { action_required: 0, informational: 0, system_log: 0 };
+    for (const r of rows) counts[r.tier] = r.count;
+    res.json(counts);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/alerts/:id/read', requireAdmin, async (req, res, next) => {
+  try {
+    await pool.query(`UPDATE admin_alerts SET is_read = true WHERE id = $1`, [req.params.id]);
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/alerts/:id/resolve', requireAdmin, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE admin_alerts SET is_resolved = true, resolved_by = $1, resolved_at = NOW() WHERE id = $2`,
+      [req.user.userId, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/alerts/:id/action', requireAdmin, async (req, res, next) => {
+  try {
+    const { action } = req.body;
+    const { rows: alertRows } = await pool.query(`SELECT * FROM admin_alerts WHERE id = $1`, [req.params.id]);
+    if (alertRows.length === 0) return res.status(404).json({ error: 'Alert not found' });
+    const alert = alertRows[0];
+
+    if (action === 'approve_provider' && alert.provider_id) {
+      const { rows } = await pool.query(
+        `UPDATE providers
+         SET admin_approved = true, admin_approved_at = COALESCE(admin_approved_at, NOW()),
+             live_at = CASE WHEN enrichment_status IN ('processed','reviewed') AND live_at IS NULL THEN NOW() ELSE live_at END,
+             updated_at = NOW()
+         WHERE id = $1 RETURNING id, admin_approved, live_at`,
+        [alert.provider_id]
+      );
+      if (rows.length > 0) {
+        try { await (await import('../services/recommendations.js')).scrubRecommenderDetails(alert.provider_id, 'admin_approval'); } catch {}
+        if (rows[0].live_at) await createAlertSafe({ type: 'provider_live', providerId: alert.provider_id });
+      }
+      await pool.query(
+        `UPDATE admin_alerts SET is_resolved = true, resolved_by = $1, resolved_at = NOW() WHERE id = $2`,
+        [req.user.userId, req.params.id]
+      );
+      return res.json({ ok: true, result: rows[0] });
+    }
+
+    if (action === 'dismiss') {
+      await pool.query(
+        `UPDATE admin_alerts SET is_resolved = true, resolved_by = $1, resolved_at = NOW() WHERE id = $2`,
+        [req.user.userId, req.params.id]
+      );
+      return res.json({ ok: true });
+    }
+
+    res.status(400).json({ error: `Unknown action: ${action}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/alerts/bulk-read', requireAdmin, async (req, res, next) => {
+  try {
+    const { alertIds } = req.body;
+    if (!Array.isArray(alertIds) || alertIds.length === 0) return res.status(400).json({ error: 'alertIds required' });
+    await pool.query(`UPDATE admin_alerts SET is_read = true WHERE id = ANY($1)`, [alertIds]);
+    res.json({ ok: true, count: alertIds.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/alerts/bulk-resolve', requireAdmin, async (req, res, next) => {
+  try {
+    const { alertIds } = req.body;
+    if (!Array.isArray(alertIds) || alertIds.length === 0) return res.status(400).json({ error: 'alertIds required' });
+    await pool.query(
+      `UPDATE admin_alerts SET is_resolved = true, resolved_by = $1, resolved_at = NOW() WHERE id = ANY($2)`,
+      [req.user.userId, alertIds]
+    );
+    res.json({ ok: true, count: alertIds.length });
   } catch (err) {
     next(err);
   }
@@ -406,8 +514,11 @@ router.post('/providers/:id/approve', requireAdmin, async (req, res, next) => {
     try {
       scrubbed = await scrubRecommenderDetails(req.params.id, 'admin_approval');
     } catch (scrubErr) {
-      // Don't fail the approval if scrub had an issue — surface it but keep going
       console.error(`[approve] scrub failed for ${req.params.id}:`, scrubErr.message);
+    }
+
+    if (rows[0].live_at) {
+      await createAlertSafe({ type: 'provider_live', providerId: parseInt(req.params.id), message: 'Provider is now live.' });
     }
 
     res.json({ ...rows[0], recommendations_scrubbed: scrubbed });
@@ -426,6 +537,7 @@ router.post('/providers/:id/suspend', requireAdmin, async (req, res, next) => {
       [reason || null, req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Provider not found' });
+    await createAlertSafe({ type: 'provider_suspended', providerId: parseInt(req.params.id), metadata: { suspended_by: req.user?.userId, reason } });
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -454,6 +566,7 @@ router.post('/providers/:id/delete', requireAdmin, async (req, res, next) => {
       [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Provider not found' });
+    await createAlertSafe({ type: 'provider_deleted', providerId: parseInt(req.params.id), metadata: { deleted_by: req.user?.userId } });
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -468,6 +581,7 @@ router.post('/providers/:id/reactivate', requireAdmin, async (req, res, next) =>
       [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Provider not found' });
+    await createAlertSafe({ type: 'provider_reactivated', providerId: parseInt(req.params.id), metadata: { reactivated_by: req.user?.userId } });
     res.json(rows[0]);
   } catch (err) {
     next(err);

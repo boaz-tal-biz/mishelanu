@@ -15,29 +15,6 @@ const ENRICHMENT_LABELS = {
   reviewed: 'Reviewed',
 };
 
-const ALERT_LABELS = {
-  new_registration: 'New Member',
-  category_suggestion: 'Category Suggestion',
-  approval_ready: 'Approval Ready',
-  provider_ping: 'Provider Ping',
-  contact_message: 'Contact Message',
-  application_expired: 'Application Expired',
-  deadline_warning: 'Deadline Warning',
-  missing_recommendations: 'Needs Recommendations',
-  renewal_due: 'Renewal Coming Up',
-};
-
-const ALERT_BADGE_CLASS = {
-  new_registration: 'badge-teal',
-  approval_ready: 'badge-teal',
-  category_suggestion: 'badge-gold',
-  provider_ping: 'badge-gold',
-  contact_message: 'badge-navy',
-  application_expired: 'badge-coral',
-  deadline_warning: 'badge-coral',
-  missing_recommendations: 'badge-coral',
-  renewal_due: 'badge-gold',
-};
 
 const REQUEST_STATUS_LABELS = {
   new: 'New',
@@ -147,12 +124,19 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, hasRole, navigate]);
 
-  const reloadAlerts = () => api.get('/admin/alerts').then(setAlerts).catch(() => {});
+  const [alertCounts, setAlertCounts] = useState({ action_required: 0, informational: 0, system_log: 0 });
+  const reloadAlertCounts = () => api.get('/admin/alerts/counts').then(setAlertCounts).catch(() => {});
   const reloadCategories = () => api.get('/admin/categories').then(setCategories).catch(() => {});
 
   useEffect(() => {
     if (!isAuthenticated || !hasRole('admin')) return;
-    if (tab === 'alerts') reloadAlerts();
+    reloadAlertCounts();
+    const interval = setInterval(reloadAlertCounts, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !hasRole('admin')) return;
     if (tab === 'providers') {
       const params = new URLSearchParams();
       if (filters.status) params.set('status', filters.status);
@@ -162,26 +146,13 @@ export default function AdminDashboard() {
     }
     if (tab === 'categories') reloadCategories();
     if (tab === 'requests') api.get('/admin/requests').then(setRequests).catch(() => {});
-    if (tab === 'users') {} // UsersTab loads its own data
   }, [isAuthenticated, tab, filters]);
-
-  async function dismissAlert(id) {
-    await api.post(`/admin/alerts/${id}/dismiss`);
-    setAlerts(a => a.filter(al => al.id !== id));
-  }
-
-  async function approveProvider(providerId, alertId) {
-    await api.post(`/admin/providers/${providerId}/approve`);
-    if (alertId) {
-      await api.post(`/admin/alerts/${alertId}/dismiss`);
-      setAlerts(a => a.filter(al => al.id !== alertId));
-    }
-  }
 
   if (!isAuthenticated || !hasRole('admin')) return null;
 
+  const totalAlerts = alertCounts.action_required + alertCounts.informational;
   const tabs = [
-    { key: 'alerts', label: `Alerts (${alerts.length})`, icon: '&#x1F514;' },
+    { key: 'alerts', label: `Alerts${totalAlerts > 0 ? ` (${totalAlerts})` : ''}`, icon: '&#x1F514;' },
     { key: 'providers', label: 'Providers', icon: '&#x1F465;' },
     { key: 'categories', label: 'Categories', icon: '&#x1F4C2;' },
     { key: 'requests', label: 'Requests', icon: '&#x1F4E8;' },
@@ -221,11 +192,7 @@ export default function AdminDashboard() {
       </div>
 
       {tab === 'alerts' && (
-        <AlertsTab
-          alerts={alerts}
-          dismissAlert={dismissAlert}
-          approveProvider={approveProvider}
-        />
+        <AlertsTab api={api} counts={alertCounts} reloadCounts={reloadAlertCounts} />
       )}
 
       {tab === 'providers' && (
@@ -265,102 +232,210 @@ export default function AdminDashboard() {
 // ────────────────────────────────────────────────────────────────────────────
 // Alerts tab
 // ────────────────────────────────────────────────────────────────────────────
-function AlertsTab({ alerts, dismissAlert, approveProvider }) {
-  if (alerts.length === 0) {
-    return (
-      <div className="empty-state">
-        <span className="empty-emoji">&#x2705;</span>
-        <p>All clear! Mishelanu has nothing to flag right now.</p>
-      </div>
-    );
+const TIER_COLOURS = { action_required: 'var(--coral)', informational: 'var(--teal)', system_log: '#9e9e9e' };
+const TIER_LABELS = { action_required: 'Action Required', informational: 'Informational', system_log: 'System Log' };
+
+function timeAgo(dateStr) {
+  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 172800) return 'yesterday';
+  return new Date(dateStr).toLocaleDateString('en-GB');
+}
+
+function AlertsTab({ api, counts, reloadCounts }) {
+  const [tierFilter, setTierFilter] = useState('action_required');
+  const [alerts, setAlerts] = useState([]);
+  const [showResolved, setShowResolved] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+
+  const load = () => {
+    const params = new URLSearchParams();
+    if (tierFilter !== 'all') params.set('tier', tierFilter);
+    if (showResolved) params.set('is_resolved', 'all');
+    api.get(`/admin/alerts?${params}`).then(setAlerts).catch(() => {});
+  };
+
+  useEffect(() => { load(); }, [tierFilter, showResolved]);
+
+  async function doAction(alertId, action) {
+    await api.post(`/admin/alerts/${alertId}/action`, { action });
+    load();
+    reloadCounts();
   }
+
+  async function markRead(alertId) {
+    await api.patch(`/admin/alerts/${alertId}/read`);
+    setAlerts(a => a.map(al => al.id === alertId ? { ...al, is_read: true } : al));
+  }
+
+  async function resolve(alertId) {
+    await api.patch(`/admin/alerts/${alertId}/resolve`);
+    load();
+    reloadCounts();
+  }
+
+  async function bulkRead() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    await api.patch('/admin/alerts/bulk-read', { alertIds: ids });
+    setSelected(new Set());
+    load();
+  }
+
+  async function bulkResolve() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    await api.patch('/admin/alerts/bulk-resolve', { alertIds: ids });
+    setSelected(new Set());
+    load();
+    reloadCounts();
+  }
+
+  function toggle(id) {
+    setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  const tierTabs = [
+    { key: 'action_required', label: `Action Required (${counts.action_required})`, colour: 'var(--coral)' },
+    { key: 'informational', label: `Informational (${counts.informational})`, colour: 'var(--teal)' },
+    { key: 'system_log', label: `System Log (${counts.system_log})`, colour: '#9e9e9e' },
+    { key: 'all', label: 'All', colour: 'var(--navy)' },
+  ];
+
+  const emptyMessages = {
+    action_required: 'All clear — nothing requires your attention right now.',
+    informational: 'No informational alerts.',
+    system_log: 'No system log entries.',
+    all: 'No alerts to display.',
+  };
 
   return (
     <div>
-      {alerts.map(alert => (
-        <AlertCard
-          key={alert.id}
-          alert={alert}
-          onDismiss={() => dismissAlert(alert.id)}
-          onApproveProvider={(pid) => approveProvider(pid, alert.id)}
-        />
-      ))}
+      <div className="flex gap-1 mb-2" style={{ flexWrap: 'wrap' }}>
+        {tierTabs.map(t => (
+          <button key={t.key} onClick={() => setTierFilter(t.key)}
+            style={{
+              padding: '0.4rem 1rem', borderRadius: 'var(--radius-pill)', border: 'none',
+              background: tierFilter === t.key ? t.colour : 'var(--gray-100)',
+              color: tierFilter === t.key ? 'white' : 'var(--gray-600)',
+              fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+            }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-1 mb-2" style={{ flexWrap: 'wrap' }}>
+        <label style={{ fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
+          <input type="checkbox" checked={showResolved} onChange={e => setShowResolved(e.target.checked)}
+            style={{ marginRight: '0.25rem' }} />
+          Show resolved
+        </label>
+        {selected.size > 0 && (
+          <>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem', marginLeft: 'auto' }}
+              onClick={bulkRead}>Mark {selected.size} as Read</button>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+              onClick={bulkResolve}>Resolve {selected.size}</button>
+          </>
+        )}
+      </div>
+
+      {alerts.length === 0 ? (
+        <div className="empty-state">
+          <span className="empty-emoji">&#x2705;</span>
+          <p>{emptyMessages[tierFilter]}</p>
+        </div>
+      ) : (
+        alerts.map(alert => (
+          <AlertCard
+            key={alert.id}
+            alert={alert}
+            selected={selected.has(alert.id)}
+            onToggle={() => toggle(alert.id)}
+            onAction={(action) => doAction(alert.id, action)}
+            onMarkRead={() => markRead(alert.id)}
+            onResolve={() => resolve(alert.id)}
+          />
+        ))
+      )}
     </div>
   );
 }
 
-function AlertCard({ alert, onDismiss, onApproveProvider }) {
-  const badgeClass = ALERT_BADGE_CLASS[alert.alert_type] || 'badge-navy';
-  const label = ALERT_LABELS[alert.alert_type] || alert.alert_type;
+function AlertCard({ alert, selected, onToggle, onAction, onMarkRead, onResolve }) {
+  const tierColour = TIER_COLOURS[alert.tier] || '#9e9e9e';
   const meta = alert.metadata || {};
 
   return (
-    <div className="card-flat mb-2" style={{ padding: '1rem 1.25rem' }}>
-      <div className="flex items-center justify-between" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
+    <div className="card-flat mb-2" style={{
+      padding: '0.875rem 1rem 0.875rem 1.25rem',
+      borderLeft: `4px solid ${tierColour}`,
+      background: alert.is_read ? 'white' : 'var(--cream, #fffdf8)',
+      opacity: alert.is_resolved ? 0.6 : 1,
+    }}>
+      <div className="flex items-start" style={{ gap: '0.75rem' }}>
+        <input type="checkbox" checked={selected} onChange={onToggle}
+          style={{ marginTop: '0.25rem', flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ marginBottom: '0.25rem' }}>
-            <span className={`badge ${badgeClass}`} style={{ marginRight: '0.5rem' }}>{label}</span>
-            <span style={{ fontSize: '0.875rem' }}>{alert.alert_message}</span>
-            {alert.provider_name && (
-              <span style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginLeft: '0.5rem' }}>
-                — {alert.provider_name}
-              </span>
-            )}
+          <div className="flex items-center gap-1" style={{ marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+            <span style={{
+              display: 'inline-block', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-pill)',
+              fontSize: '0.6875rem', fontWeight: 600, background: tierColour, color: 'white',
+            }}>{TIER_LABELS[alert.tier]}</span>
+            <strong style={{ fontSize: '0.875rem', fontWeight: alert.is_read ? 500 : 700 }}>
+              {alert.title}
+            </strong>
+            <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{timeAgo(alert.created_at)}</span>
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
-            {new Date(alert.created_at).toLocaleString('en-GB')}
-          </div>
-          {alert.alert_type === 'contact_message' && (
-            <div style={{ marginTop: '0.625rem', padding: '0.625rem 0.875rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)', fontSize: '0.8125rem', color: 'var(--gray-700)' }}>
-              <div style={{ marginBottom: '0.25rem' }}>
-                <strong>{meta.name || 'Anonymous'}</strong>
-                {' · '}
-                {meta.email && <a href={`mailto:${meta.email}`} style={{ color: 'var(--navy)' }}>{meta.email}</a>}
-                {meta.phone && <span> · {meta.phone}</span>}
-              </div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{meta.message}</div>
-              {meta.provider_slug && (
-                <div style={{ marginTop: '0.375rem', fontSize: '0.75rem', color: 'var(--gray-500)' }}>
-                  About provider: <Link to={`/provider/${meta.provider_slug}`} style={{ color: 'var(--navy)' }}>{meta.provider_slug}</Link>
-                </div>
-              )}
+          {alert.message && (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--gray-600)', marginBottom: '0.375rem' }}>
+              {alert.message}
+            </div>
+          )}
+          {alert.provider_name && (
+            <Link to={`/admin/provider/${alert.provider_id}`}
+              style={{ fontSize: '0.8125rem', color: 'var(--teal)', textDecoration: 'none' }}>
+              {alert.provider_name}
+            </Link>
+          )}
+
+          {/* Contact message detail */}
+          {alert.type === 'contact_message' && meta.message && (
+            <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
+              <strong>{meta.name}</strong> · {meta.email}{meta.phone ? ` · ${meta.phone}` : ''}
+              {meta.subject && <span style={{ color: 'var(--gray-500)' }}> · {meta.subject}</span>}
+              <div style={{ whiteSpace: 'pre-wrap', marginTop: '0.25rem', color: 'var(--gray-700)' }}>{meta.message}</div>
+            </div>
+          )}
+
+          {/* Opt-in detail */}
+          {(alert.type === 'opt_in_provider' || alert.type === 'opt_in_user') && meta.recommender_email && (
+            <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--gray-600)' }}>
+              Contact: {meta.recommender_email}{meta.recommender_phone ? ` · ${meta.recommender_phone}` : ''}
             </div>
           )}
         </div>
 
-        <div className="flex gap-1" style={{ flexShrink: 0 }}>
-          {alert.alert_type === 'approval_ready' && alert.provider_id && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
-              onClick={() => onApproveProvider(alert.provider_id)}
-            >
-              Approve
-            </button>
+        <div className="flex gap-1" style={{ flexShrink: 0, flexWrap: 'wrap' }}>
+          {alert.type === 'approval_ready' && alert.provider_id && !alert.is_resolved && (
+            <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+              onClick={() => onAction('approve_provider')}>Approve</button>
           )}
-          {(alert.alert_type === 'provider_ping' || alert.alert_type === 'application_expired') && alert.provider_id && (
-            <Link
-              to={`/admin/provider/${alert.provider_id}`}
-              className="btn btn-outline"
-              style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
-            >
-              View provider
-            </Link>
+          {alert.provider_id && (
+            <Link to={`/admin/provider/${alert.provider_id}`} className="btn btn-outline"
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}>View</Link>
           )}
-          {alert.provider_id && alert.alert_type !== 'provider_ping' && alert.alert_type !== 'application_expired' && alert.alert_type !== 'approval_ready' && alert.alert_type !== 'contact_message' && (
-            <Link to={`/admin/provider/${alert.provider_id}`} className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}>
-              View
-            </Link>
+          {!alert.is_read && (
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+              onClick={onMarkRead}>Read</button>
           )}
-          <button
-            type="button"
-            className="btn btn-outline"
-            style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
-            onClick={onDismiss}
-          >
-            Dismiss
-          </button>
+          {!alert.is_resolved && (
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+              onClick={onResolve}>Resolve</button>
+          )}
         </div>
       </div>
     </div>

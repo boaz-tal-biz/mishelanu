@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../db/pool.js';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveCategories } from '../services/categories.js';
+import { createAlertSafe } from '../services/alerts.js';
 
 const router = Router();
 
@@ -106,12 +107,11 @@ router.post('/', async (req, res, next) => {
     // Resolve categories (aliases → active, else create suggested)
     await resolveCategories(service_categories || []);
 
-    // Create admin alert for new registration
-    await pool.query(
-      `INSERT INTO admin_alerts (provider_id, alert_type, alert_message)
-       VALUES ($1, 'new_registration', $2)`,
-      [provider.id, `New provider registration: ${first_name} ${surname}`]
-    );
+    await createAlertSafe({
+      type: 'new_registration',
+      providerId: provider.id,
+      message: `New provider registration: ${first_name} ${surname}`,
+    });
 
     res.status(201).json({
       id: provider.id,
@@ -324,7 +324,7 @@ router.post('/:slug/ping-admin', async (req, res, next) => {
 
     const recent = await pool.query(
       `SELECT 1 FROM admin_alerts
-       WHERE provider_id = $1 AND alert_type = 'provider_ping'
+       WHERE provider_id = $1 AND type = 'provider_ping'
          AND created_at > NOW() - INTERVAL '24 hours'
        LIMIT 1`,
       [p.id]
@@ -333,11 +333,11 @@ router.post('/:slug/ping-admin', async (req, res, next) => {
       return res.status(429).json({ error: 'Mishelanu has already received your nudge today. We will be in touch soon.' });
     }
 
-    await pool.query(
-      `INSERT INTO admin_alerts (provider_id, alert_type, alert_message)
-       VALUES ($1, 'provider_ping', $2)`,
-      [p.id, `${p.first_name} ${p.surname} is asking for an approval update.`]
-    );
+    await createAlertSafe({
+      type: 'provider_ping',
+      providerId: p.id,
+      message: `${p.first_name} ${p.surname} is asking for an approval update.`,
+    });
     res.json({ ok: true, message: 'Mishelanu has been nudged — we will review your profile shortly.' });
   } catch (err) {
     next(err);

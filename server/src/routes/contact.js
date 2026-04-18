@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { createAlertSafe } from '../services/alerts.js';
 
 const router = Router();
 
@@ -23,17 +24,12 @@ router.post('/', async (req, res, next) => {
       if (rows.length > 0) providerId = rows[0].id;
     }
 
-    const summary = `Contact from ${name} (${email}${phone ? `, ${phone}` : ''})`;
-
-    await pool.query(
-      `INSERT INTO admin_alerts (provider_id, alert_type, alert_message, metadata)
-       VALUES ($1, 'contact_message', $2, $3)`,
-      [
-        providerId,
-        summary,
-        JSON.stringify({ name, email, phone: phone || null, message, subject: subject || null, provider_slug: provider_slug || null })
-      ]
-    );
+    await createAlertSafe({
+      type: 'contact_message',
+      providerId,
+      message: `Contact from ${name} (${email}${phone ? `, ${phone}` : ''})`,
+      metadata: { name, email, phone: phone || null, message, subject: subject || null, provider_slug: provider_slug || null },
+    });
 
     res.status(201).json({ ok: true, message: 'Toda raba — Mishelanu has received your message and will be in touch soon.' });
   } catch (err) {

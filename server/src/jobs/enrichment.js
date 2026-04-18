@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { createAlertSafe } from '../services/alerts.js';
 
 const anthropic = new Anthropic();
 
@@ -117,16 +118,19 @@ Reply ONLY with valid JSON, no markdown fences.`
         params
       );
 
+      await createAlertSafe({
+        type: 'enrichment_completed',
+        providerId: provider.id,
+        message: `LLM enrichment completed for ${providerName}.`,
+      });
+
       if (result.suggested_categories?.length > 0) {
-        await pool.query(
-          `INSERT INTO admin_alerts (provider_id, alert_type, alert_message, metadata)
-           VALUES ($1, 'category_suggestion', $2, $3)`,
-          [
-            provider.id,
-            `LLM suggests additional categories for ${providerName}: ${result.suggested_categories.join(', ')}`,
-            JSON.stringify({ suggested: result.suggested_categories, provider_id: provider.id })
-          ]
-        );
+        await createAlertSafe({
+          type: 'category_suggested',
+          providerId: provider.id,
+          message: `LLM suggests additional categories for ${providerName}: ${result.suggested_categories.join(', ')}`,
+          metadata: { suggested: result.suggested_categories },
+        });
       }
 
       // Go-live check: enrichment now processed + admin_approved.

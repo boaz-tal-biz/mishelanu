@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../db/pool.js';
 import { requireSuperAdmin } from '../middleware/auth.js';
+import { createAlertSafe } from '../services/alerts.js';
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.post('/', async (req, res, next) => {
        RETURNING id, email, first_name, surname, role, is_active, created_at`,
       [email.toLowerCase().trim(), hash, first_name, surname, role, req.user.userId]
     );
+    await createAlertSafe({ type: 'admin_user_created', metadata: { created_by: req.user.userId, role, email: email.toLowerCase().trim() } });
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
@@ -80,6 +82,9 @@ router.patch('/:id', async (req, res, next) => {
       params
     );
     if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    if (role && role !== existing[0].role) {
+      await createAlertSafe({ type: 'admin_user_role_changed', metadata: { changed_by: req.user.userId, old_role: existing[0].role, new_role: role, email: rows[0].email } });
+    }
     res.json(rows[0]);
   } catch (err) {
     next(err);
