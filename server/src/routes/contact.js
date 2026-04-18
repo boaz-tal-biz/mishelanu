@@ -6,7 +6,7 @@ const router = Router();
 // Public contact form → creates a contact_message alert for admin
 router.post('/', async (req, res, next) => {
   try {
-    const { name, email, phone, message, provider_slug } = req.body || {};
+    const { name, email, phone, message, subject, provider_slug } = req.body || {};
     if (!name || !email || !message) {
       return res.status(400).json({ error: 'name, email, and message are required' });
     }
@@ -31,7 +31,7 @@ router.post('/', async (req, res, next) => {
       [
         providerId,
         summary,
-        JSON.stringify({ name, email, phone: phone || null, message, provider_slug: provider_slug || null })
+        JSON.stringify({ name, email, phone: phone || null, message, subject: subject || null, provider_slug: provider_slug || null })
       ]
     );
 

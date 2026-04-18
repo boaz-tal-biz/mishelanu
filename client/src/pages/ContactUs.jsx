@@ -1,13 +1,24 @@
 import { useState } from 'react';
+import { api } from '../hooks/useApi.js';
 
 export default function ContactUs() {
-  const [form, setForm] = useState({ name: '', email: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '', subject: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(null);
+  const [sending, setSending] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    // For MVP, just show confirmation — no backend endpoint yet
-    setSubmitted(true);
+    setError(null);
+    setSending(true);
+    try {
+      await api.post('/contact', form);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
   }
 
   if (submitted) {
@@ -29,11 +40,12 @@ export default function ContactUs() {
       <div className="text-center" style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ color: 'var(--navy)', fontSize: '1.5rem', marginBottom: '0.25rem' }}>Get in Touch</h1>
         <p style={{ color: 'var(--gray-500)', fontSize: '0.9375rem' }}>
-          Questions? Ideas? Want to get involved? Mishelanu would love to hear from you.
+          Have a question about Mishelanu? Want to report an issue or give us feedback? Get in touch.
         </p>
       </div>
 
       <div className="card card-accent">
+        {error && <div className="msg-error" style={{ marginBottom: '1rem' }}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Your name *</label>
@@ -48,19 +60,37 @@ export default function ContactUs() {
           </div>
 
           <div className="form-group">
-            <label>Your message *</label>
-            <textarea required rows={5} value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
-              placeholder="Tell us what's on your mind..." />
+            <label>Phone (optional)</label>
+            <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+              placeholder="e.g. 07700 000 000" />
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            Send to Mishelanu
+          <div className="form-group">
+            <label>What is this about?</label>
+            <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
+              <option value="">Select a topic (optional)</option>
+              <option value="General enquiry">General enquiry</option>
+              <option value="Provider registration">Provider registration</option>
+              <option value="Recommendation">Recommendation</option>
+              <option value="Report a problem">Report a problem</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Your message *</label>
+            <textarea required rows={5} value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+              placeholder="Tell us what's on your mind..." maxLength={2000} />
+          </div>
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={sending}>
+            {sending ? 'Sending...' : 'Send to Mishelanu'}
           </button>
         </form>
       </div>
 
       <div className="text-center mt-3" style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>
-        <p>You can also reach us directly at <a href="mailto:hello@mishelanu.com">hello@mishelanu.com</a></p>
+        <p>You can also reach us directly at <a href="mailto:boaz@bless.network" style={{ color: 'var(--teal)' }}>boaz@bless.network</a></p>
       </div>
     </div>
   );

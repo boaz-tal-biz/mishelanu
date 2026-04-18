@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import Header from './components/Header.jsx';
+import Footer from './components/Footer.jsx';
 import Home from './pages/Home.jsx';
 import Register from './pages/Register.jsx';
 import Profile from './pages/Profile.jsx';
@@ -13,6 +14,9 @@ import SimGroup from './pages/SimGroup.jsx';
 import SimProvider from './pages/SimProvider.jsx';
 import SimRequester from './pages/SimRequester.jsx';
 import ContactUs from './pages/ContactUs.jsx';
+import Privacy from './pages/Privacy.jsx';
+import Terms from './pages/Terms.jsx';
+import Disclaimer from './pages/Disclaimer.jsx';
 
 export default function App() {
   return (
@@ -32,8 +36,12 @@ export default function App() {
           <Route path="/sim/provider/:phone" element={<SimProvider />} />
           <Route path="/sim/requester/:phone" element={<SimRequester />} />
           <Route path="/contact" element={<ContactUs />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/disclaimer" element={<Disclaimer />} />
         </Routes>
       </main>
+      <Footer />
     </AuthProvider>
   );
 }
