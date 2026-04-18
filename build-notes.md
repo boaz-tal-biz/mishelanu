@@ -2,16 +2,15 @@
 
 ## ▶ Latest: Frontend tranche, overnight 2026-04-17 → 2026-04-18
 
-**Status:** built, smoke-tested locally, committed, pushed. **NOT deployed to VPS.**
+**Status:** built, smoke-tested locally, committed, pushed. **Deployed to VPS 2026-04-18 09:03 UTC.**
 **Commit:** `1fc0c27` on `main` (GitHub).
+**Prod bundle:** `/assets/index-CN-dQZwo.js` (hash matches local build → reproducible).
 
 ### Morning checklist for Boaz
 
-1. Read this top section.
-2. `git log -1` to see the commit.
-3. Eyeball the diff with `git show HEAD --stat` or in GitHub.
-4. When you want to deploy, the workflow from last night still applies — rsync + `docker compose up --build -d`. The schema is already in place (no new migrations needed), so this deploy is JS-only.
-5. Quick prod sanity after deploy: register a fake provider, verify the redirect lands you on the management view, eyeball the progress bar and countdown.
+1. The frontend tranche is now live on http://187.77.179.106:3001 — register a fake provider to eyeball the new flow.
+2. Smoke test on prod after deploy: `/manage` returns `recommendations` + `parsed_profile` + `payment_types` + `business_size`; admin `/categories` returns `provider_count` + aliases; PATCH category status works; bundle hash matches local build.
+3. Test cleanup left prod with 0 providers (same as before).
 
 ### What shipped
 
