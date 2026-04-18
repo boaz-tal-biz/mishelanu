@@ -2,8 +2,11 @@
 
 ## ▶ Latest: Recommendation system redesign, 2026-04-18
 
-**Status:** built, smoke-tested locally, committed, pushed, **deploy in progress this turn**.
+**Status:** built, smoke-tested locally, committed, pushed, **deployed to VPS 2026-04-18 09:13 UTC**.
+**Commit:** `2d82e1e` on `main`.
 **Spec:** "Mishelanu — Recommendation System Redesign" (in chat).
+**DB backup:** `/opt/mishelanu/backups/pre-008-20260418-091147.sql` on the VPS.
+**Prod smoke test:** end-to-end registration → 3 recommendations → opt_in_interest alert with full contact metadata → admin approve → all 3 recs scrubbed (contact details null, `details_scrubbed=true`) → audit row written → test data cleaned. Validation paths confirmed (personal_work without service_description → 400). Bundle contains new copy ("Someone you know wants to join Mishelanu", "Do you know"). Prod back to 0 providers.
 
 ### What shipped
 
