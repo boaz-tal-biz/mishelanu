@@ -1,6 +1,25 @@
 # Mishelanu — Build Notes
 
-## ▶ Latest: Recommendation system redesign, 2026-04-18
+## ▶ Latest: Smoke test, 2026-04-18
+
+**Status:** committed + pushed. **Not deployed** (dev tooling only — test runs against `localhost:3001`).
+**File:** `server/src/tests/smoke-test.js`. Runnable via `node server/src/tests/smoke-test.js`.
+**Result:** 6/6 passes on two consecutive runs. Cleanup verified idempotent.
+
+The script covers the prompts 1–3 surface in one go: registration with all the new fields, management-token auth (good + bad), unknown-category-becomes-suggested flow, three-recommendation submission with mixed relationship types, admin approve + scrub assertion, public profile without token.
+
+### Judgement calls
+
+22. **Field name mapping** — the spec test body lists `phone`, `description`, `categories`. The actual API uses `mobile_phone`, `raw_description`, `service_categories`. The test maps to the actual API names per the spec's standing instruction to read the routes and adapt.
+23. **Case-insensitive category match** — categories.js stores subcategory lower-cased (`balloon artist`, not `Balloon Artist`). Test asserts `subcategory.toLowerCase() === 'balloon artist'` rather than exact-match. This is the existing storage behaviour, not a regression.
+24. **Forced enrichment_status before approve** — admin approve only sets `live_at` when enrichment is `processed`/`reviewed`. The spec wants the test to work without depending on the LLM job. Resolution: the test fixture flips `enrichment_status` to `processed` via direct SQL before calling approve. This is documented inline as a TEST FIXTURE, not a behaviour change to the production lifecycle.
+25. **Cookie handling** — admin auth is cookie-based (`admin_session`). Node's fetch doesn't auto-jar cookies, so the test extracts `Set-Cookie` after login and sends it back as a `Cookie` header on subsequent admin requests.
+26. **Cleanup robustness** — cleanup runs in `finally` even on test failure, deletes the provider chain (alerts, scrub log, recommendations, suggested categories), and uses `lower(subcategory) = 'balloon artist'` so it cleans up regardless of case. ON DELETE CASCADE on `category_aliases` removes the alias row.
+27. **Public profile assertion** — checks `body.management_token === undefined` to guarantee the public endpoint never leaks the token. Defence-in-depth — the route doesn't include it, but the test pins that.
+
+---
+
+## Earlier: Recommendation system redesign, 2026-04-18
 
 **Status:** built, smoke-tested locally, committed, pushed, **deployed to VPS 2026-04-18 09:13 UTC**.
 **Commit:** `2d82e1e` on `main`.
