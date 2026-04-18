@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 export default function Home() {
   return (
     <div className="container text-center" style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>&#x2721;</div>
+      <img src="/assets/mishelanu-logo-md.png" alt="Mishelanu" style={{ width: '120px', marginBottom: '0.5rem', display: 'inline-block' }} />
       <h1 style={{ color: 'var(--navy)', fontSize: '2.25rem', fontWeight: 700, marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>
         Mishelanu
       </h1>
