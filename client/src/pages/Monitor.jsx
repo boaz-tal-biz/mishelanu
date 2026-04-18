@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import SimNav from '../components/SimNav.jsx';
 
 export default function Monitor() {
   const navigate = useNavigate();
+  const { isAuthenticated, authApi: api } = useAuth();
   const [rawMessage, setRawMessage] = useState('');
   const [parsed, setParsed] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -16,8 +17,8 @@ export default function Monitor() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/admin/check').catch(() => navigate('/admin/login'));
-  }, [navigate]);
+    if (!isAuthenticated) navigate('/admin/login');
+  }, [isAuthenticated, navigate]);
 
   async function handleParse() {
     setParsing(true);

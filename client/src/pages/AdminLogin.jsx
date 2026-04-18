@@ -1,18 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function AdminLogin() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const { login, isAuthenticated, hasRole, sessionExpired, clearSessionExpired } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(hasRole('admin') ? '/admin' : '/monitor');
+    }
+  }, [isAuthenticated, hasRole, navigate]);
+
+  useEffect(() => {
+    if (sessionExpired) {
+      setError('Session expired — please sign in again');
+      clearSessionExpired();
+    }
+  }, [sessionExpired, clearSessionExpired]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
     try {
-      await api.post('/admin/login', { password });
-      navigate('/admin');
+      const user = await login(email, password);
+      navigate(user.role === 'monitor' ? '/monitor' : '/admin');
     } catch (err) {
       setError(err.message);
     }
@@ -30,11 +45,15 @@ export default function AdminLogin() {
         )}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <input type="password" placeholder="Enter password" value={password}
-              onChange={e => setPassword(e.target.value)} required />
+            <input type="email" placeholder="Email address" value={email}
+              onChange={e => setEmail(e.target.value)} required autoComplete="email" />
+          </div>
+          <div className="form-group">
+            <input type="password" placeholder="Password" value={password}
+              onChange={e => setPassword(e.target.value)} required autoComplete="current-password" />
           </div>
           <button type="submit" className="btn btn-secondary" style={{ width: '100%' }}>
-            Log In
+            Sign In
           </button>
         </form>
       </div>

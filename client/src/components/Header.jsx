@@ -1,13 +1,8 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../hooks/useApi.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function Header() {
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    api.get('/admin/check').then(() => setIsAdmin(true)).catch(() => {});
-  }, []);
+  const { isAuthenticated, hasRole, user } = useAuth();
 
   return (
     <header style={{
@@ -63,18 +58,20 @@ export default function Header() {
           }}>
             Contact
           </Link>
-          {isAdmin && (
-            <>
-              <Link to="/admin" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
-                Dashboard
-              </Link>
-              <Link to="/monitor" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
-                Monitor
-              </Link>
-              <Link to="/sim/group" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
-                Simulation
-              </Link>
-            </>
+          {isAuthenticated && hasRole('admin') && (
+            <Link to="/admin" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              Dashboard
+            </Link>
+          )}
+          {isAuthenticated && (
+            <Link to="/monitor" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              Monitor
+            </Link>
+          )}
+          {isAuthenticated && hasRole('admin') && (
+            <Link to="/sim/group" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              Simulation
+            </Link>
           )}
         </nav>
       </div>

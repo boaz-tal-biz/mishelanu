@@ -15,6 +15,9 @@ import adminRouter from './routes/admin.js';
 import monitorRouter from './routes/monitor.js';
 import simulationRouter from './routes/simulation.js';
 import contactRouter from './routes/contact.js';
+import authRouter from './routes/auth.js';
+import adminUsersRouter from './routes/admin-users.js';
+import { seedSuperAdmin } from './db/seed-admin.js';
 import { runEnrichment } from './jobs/enrichment.js';
 import { checkMissingRecommendations, checkRenewalDue, checkApplicationDeadlines } from './jobs/alerts.js';
 
@@ -35,7 +38,9 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/providers', providersRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/monitor', monitorRouter);
 app.use('/api/sim', simulationRouter);
 app.use('/api/contact', contactRouter);
@@ -70,6 +75,9 @@ app.listen(PORT, () => {
     console.log('Running application deadline check...');
     checkApplicationDeadlines().catch(err => console.error('Deadline check error:', err.message));
   });
+
+  // Seed super admin if configured
+  seedSuperAdmin().catch(err => console.error('Admin seed error:', err.message));
 
   // Also run enrichment on startup for any pending providers
   runEnrichment().catch(err => console.error('Startup enrichment error:', err.message));

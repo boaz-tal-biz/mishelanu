@@ -1,15 +1,10 @@
 import { Router } from 'express';
-import { loginAdmin, logoutAdmin, requireAdmin } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
 import pool from '../db/pool.js';
 import PDFDocument from 'pdfkit';
 import { scrubRecommenderDetails } from '../services/recommendations.js';
 
 const router = Router();
-
-// Auth
-router.post('/login', loginAdmin);
-router.post('/logout', logoutAdmin);
-router.get('/check', requireAdmin, (req, res) => res.json({ ok: true }));
 
 // --- Alerts ---
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const STATUS_LABELS = {
   active: 'Active',
@@ -134,20 +134,24 @@ export default function AdminDashboard() {
   const [categories, setCategories] = useState([]);
   const [requests, setRequests] = useState([]);
   const [filters, setFilters] = useState({ status: '', enrichment_status: '', search: '' });
-  const [authed, setAuthed] = useState(null);
   const navigate = useNavigate();
+  const { isAuthenticated, hasRole, authApi: api, logout } = useAuth();
 
   useEffect(() => {
-    api.get('/admin/check')
-      .then(() => setAuthed(true))
-      .catch(() => navigate('/admin/login'));
-  }, [navigate]);
+    if (!isAuthenticated) {
+      navigate('/admin/login');
+      return;
+    }
+    if (!hasRole('admin')) {
+      navigate('/monitor');
+    }
+  }, [isAuthenticated, hasRole, navigate]);
 
   const reloadAlerts = () => api.get('/admin/alerts').then(setAlerts).catch(() => {});
   const reloadCategories = () => api.get('/admin/categories').then(setCategories).catch(() => {});
 
   useEffect(() => {
-    if (!authed) return;
+    if (!isAuthenticated || !hasRole('admin')) return;
     if (tab === 'alerts') reloadAlerts();
     if (tab === 'providers') {
       const params = new URLSearchParams();
@@ -158,7 +162,8 @@ export default function AdminDashboard() {
     }
     if (tab === 'categories') reloadCategories();
     if (tab === 'requests') api.get('/admin/requests').then(setRequests).catch(() => {});
-  }, [authed, tab, filters]);
+    if (tab === 'users') {} // UsersTab loads its own data
+  }, [isAuthenticated, tab, filters]);
 
   async function dismissAlert(id) {
     await api.post(`/admin/alerts/${id}/dismiss`);
@@ -173,13 +178,14 @@ export default function AdminDashboard() {
     }
   }
 
-  if (authed === null) return null;
+  if (!isAuthenticated || !hasRole('admin')) return null;
 
   const tabs = [
     { key: 'alerts', label: `Alerts (${alerts.length})`, icon: '&#x1F514;' },
     { key: 'providers', label: 'Providers', icon: '&#x1F465;' },
     { key: 'categories', label: 'Categories', icon: '&#x1F4C2;' },
     { key: 'requests', label: 'Requests', icon: '&#x1F4E8;' },
+    ...(hasRole('super_admin') ? [{ key: 'users', label: 'Users', icon: '&#x1F464;' }] : []),
   ];
 
   return (
@@ -193,6 +199,9 @@ export default function AdminDashboard() {
           <Link to="/sim/group" className="btn btn-secondary" style={{ fontSize: '0.875rem', padding: '0.5rem 1.25rem' }}>
             Simulation
           </Link>
+          <button onClick={() => { logout(); navigate('/admin/login'); }} className="btn btn-outline" style={{ fontSize: '0.875rem', padding: '0.5rem 1.25rem' }}>
+            Sign Out
+          </button>
         </div>
       </div>
 
@@ -229,7 +238,7 @@ export default function AdminDashboard() {
       )}
 
       {tab === 'categories' && (
-        <CategoriesTab categories={categories} reload={reloadCategories} />
+        <CategoriesTab categories={categories} reload={reloadCategories} api={api} />
       )}
 
       {tab === 'requests' && (
@@ -244,6 +253,10 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {tab === 'users' && hasRole('super_admin') && (
+        <UsersTab api={api} />
       )}
     </div>
   );
@@ -431,7 +444,7 @@ function ProvidersTab({ providers, filters, setFilters, navigate }) {
 // ────────────────────────────────────────────────────────────────────────────
 // Categories tab
 // ────────────────────────────────────────────────────────────────────────────
-function CategoriesTab({ categories, reload }) {
+function CategoriesTab({ categories, reload, api }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -446,7 +459,7 @@ function CategoriesTab({ categories, reload }) {
   }, [categories, search, statusFilter]);
 
   async function changeStatus(id, status) {
-    await fetchPatch(`/admin/categories/${id}/status`, { status });
+    await api.patch(`/admin/categories/${id}/status`, { status });
     reload();
   }
 
@@ -515,20 +528,6 @@ function CategoriesTab({ categories, reload }) {
   );
 }
 
-// PATCH not on the api helper — define locally
-async function fetchPatch(path, body) {
-  const res = await fetch(`/api${path}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(data.error || `Request failed: ${res.status}`);
-  }
-  return res.json();
-}
 
 function CategoryRow({ cat, onChangeStatus, onAddAlias, onRemoveAlias }) {
   const [aliasInput, setAliasInput] = useState('');
@@ -634,5 +633,213 @@ function AliasChip({ alias, onRemove }) {
         &times;
       </button>
     </span>
+  );
+}
+
+// ───────────────────────────────────────────────────��────────────────────────
+// Users tab (super admin only)
+// ────────���─────────────────────────────────────────────────���─────────────────
+const ROLE_BADGE = {
+  super_admin: { bg: 'var(--navy)', label: 'Super Admin' },
+  admin: { bg: 'var(--teal)', label: 'Admin' },
+  monitor: { bg: 'var(--gold, #d4a017)', label: 'Monitor' },
+};
+
+function UsersTab({ api }) {
+  const [users, setUsers] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [resetId, setResetId] = useState(null);
+  const [form, setForm] = useState({ email: '', password: '', first_name: '', surname: '', role: 'admin' });
+  const [editForm, setEditForm] = useState({});
+  const [resetPw, setResetPw] = useState('');
+  const [error, setError] = useState(null);
+
+  const load = () => api.get('/admin/users').then(setUsers).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await api.post('/admin/users', form);
+      setForm({ email: '', password: '', first_name: '', surname: '', role: 'admin' });
+      setShowForm(false);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function handleEdit(id) {
+    setError(null);
+    try {
+      await api.patch(`/admin/users/${id}`, editForm);
+      setEditId(null);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function handleReset(id) {
+    setError(null);
+    try {
+      await api.post(`/admin/users/${id}/reset-password`, { password: resetPw });
+      setResetId(null);
+      setResetPw('');
+    } catch (err) { setError(err.message); }
+  }
+
+  async function handleDelete(id) {
+    setError(null);
+    try {
+      await api.del(`/admin/users/${id}`);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 style={{ color: 'var(--navy)', margin: 0 }}>Admin Users</h3>
+        <button className="btn btn-primary" style={{ fontSize: '0.875rem' }} onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : 'Add User'}
+        </button>
+      </div>
+
+      {error && <div className="msg-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+
+      {showForm && (
+        <form onSubmit={handleAdd} className="card" style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>First name</label>
+              <input required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Surname</label>
+              <input required value={form.surname} onChange={e => setForm(f => ({ ...f, surname: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Email</label>
+              <input type="email" required value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Password</label>
+              <input type="password" required value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Role</label>
+              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                <option value="admin">Admin</option>
+                <option value="monitor">Monitor</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" className="btn btn-primary" style={{ marginTop: '0.75rem' }}>Create User</button>
+        </form>
+      )}
+
+      <div className="card-flat" style={{ overflow: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Last Login</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => {
+              const rb = ROLE_BADGE[u.role] || { bg: '#999', label: u.role };
+              return (
+                <tr key={u.id}>
+                  <td>
+                    {editId === u.id ? (
+                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        <input style={{ width: '80px', padding: '0.25rem 0.5rem', fontSize: '0.8125rem' }}
+                          value={editForm.first_name ?? u.first_name}
+                          onChange={e => setEditForm(f => ({ ...f, first_name: e.target.value }))} />
+                        <input style={{ width: '80px', padding: '0.25rem 0.5rem', fontSize: '0.8125rem' }}
+                          value={editForm.surname ?? u.surname}
+                          onChange={e => setEditForm(f => ({ ...f, surname: e.target.value }))} />
+                      </div>
+                    ) : (
+                      <strong>{u.first_name} {u.surname}</strong>
+                    )}
+                  </td>
+                  <td style={{ fontSize: '0.8125rem' }}>{u.email}</td>
+                  <td>
+                    {editId === u.id && u.role !== 'super_admin' ? (
+                      <select style={{ padding: '0.25rem', fontSize: '0.8125rem' }}
+                        value={editForm.role ?? u.role}
+                        onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}>
+                        <option value="admin">Admin</option>
+                        <option value="monitor">Monitor</option>
+                      </select>
+                    ) : (
+                      <span style={{
+                        display: 'inline-block', padding: '0.2rem 0.625rem', borderRadius: 'var(--radius-pill)',
+                        fontSize: '0.75rem', fontWeight: 600, background: rb.bg, color: 'white',
+                      }}>{rb.label}</span>
+                    )}
+                  </td>
+                  <td>
+                    <span style={{
+                      display: 'inline-block', padding: '0.2rem 0.625rem', borderRadius: 'var(--radius-pill)',
+                      fontSize: '0.75rem', fontWeight: 600,
+                      background: u.is_active ? 'var(--teal-glow, #d8f3ed)' : '#ececec',
+                      color: u.is_active ? 'var(--teal-dark, #1a8773)' : '#666',
+                    }}>{u.is_active ? 'Active' : 'Inactive'}</span>
+                  </td>
+                  <td style={{ fontSize: '0.8125rem' }}>
+                    {u.last_login_at ? new Date(u.last_login_at).toLocaleString('en-GB') : '—'}
+                  </td>
+                  <td>
+                    <div className="flex gap-1" style={{ flexWrap: 'wrap' }}>
+                      {editId === u.id ? (
+                        <>
+                          <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                            onClick={() => handleEdit(u.id)}>Save</button>
+                          <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                            onClick={() => setEditId(null)}>Cancel</button>
+                        </>
+                      ) : resetId === u.id ? (
+                        <>
+                          <input type="password" placeholder="New password" style={{ width: '120px', padding: '0.25rem 0.5rem', fontSize: '0.8125rem' }}
+                            value={resetPw} onChange={e => setResetPw(e.target.value)} />
+                          <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                            onClick={() => handleReset(u.id)}>Set</button>
+                          <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                            onClick={() => { setResetId(null); setResetPw(''); }}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          {u.role !== 'super_admin' && (
+                            <>
+                              <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                                onClick={() => { setEditId(u.id); setEditForm({ first_name: u.first_name, surname: u.surname, role: u.role }); }}>Edit</button>
+                              <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                                onClick={() => setResetId(u.id)}>Reset PW</button>
+                              {u.is_active ? (
+                                <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem', color: 'var(--coral)' }}
+                                  onClick={() => handleDelete(u.id)}>Deactivate</button>
+                              ) : (
+                                <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.625rem' }}
+                                  onClick={() => api.patch(`/admin/users/${u.id}`, { is_active: true }).then(load)}>Reactivate</button>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

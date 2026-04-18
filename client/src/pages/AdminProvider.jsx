@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const STATUS_LABELS = {
   active: 'Active',
@@ -25,15 +25,16 @@ const ENRICHMENT_LABELS = {
 export default function AdminProvider() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAuthenticated, authApi: api } = useAuth();
   const [provider, setProvider] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/admin/check').catch(() => navigate('/admin/login'));
+    if (!isAuthenticated) { navigate('/admin/login'); return; }
     loadProvider();
-  }, [id]);
+  }, [id, isAuthenticated]);
 
   async function loadProvider() {
     try {

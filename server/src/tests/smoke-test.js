@@ -8,8 +8,8 @@
 //
 // Assumes:
 //   - Server running on PORT 3001
-//   - Database migrated (migrations 001–009)
-//   - ADMIN_PASSWORD set in env (pool.js loads .env automatically)
+//   - Database migrated (migrations 001–010)
+//   - SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD set in env
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -19,28 +19,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-// pool.js also calls dotenv.config(), but doing it here too means
-// ADMIN_PASSWORD is available before pool import side-effects, just in case.
 const { default: pool } = await import('../db/pool.js');
 
 const BASE = process.env.SMOKE_BASE_URL || 'http://localhost:3001';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
+const ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
 
 // ─── plumbing ──────────────────────────────────────────────────────────────
 
-let cookieJar = '';
+let authToken = '';
 
 async function req(method, pathPart, body, { admin = false } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  if (admin && cookieJar) headers.Cookie = cookieJar;
+  if (admin && authToken) headers.Authorization = `Bearer ${authToken}`;
   const init = { method, headers };
   if (body !== undefined) init.body = JSON.stringify(body);
   const res = await fetch(`${BASE}${pathPart}`, init);
-  const setCookie = res.headers.get('set-cookie');
-  if (setCookie) {
-    const m = setCookie.match(/admin_session=[^;]+/);
-    if (m) cookieJar = m[0];
-  }
   let data = null;
   const ctype = res.headers.get('content-type') || '';
   if (ctype.includes('application/json')) {
@@ -126,14 +120,14 @@ async function test2ManagementAuth() {
 }
 
 async function test3CategorySuggested() {
-  // Admin login first
-  const login = await req('POST', '/api/admin/login', { password: ADMIN_PASSWORD });
+  // Admin login via JWT
+  const login = await req('POST', '/api/auth/login', { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
   check(login.status === 200, `admin login failed: ${login.status} ${JSON.stringify(login.body)}`);
+  authToken = login.body.token;
 
   const { status, body } = await req('GET', '/api/admin/categories', undefined, { admin: true });
   check(status === 200, `expected 200, got ${status}`);
   check(Array.isArray(body), 'expected array of categories');
-  // Categories service stores subcategory lower-cased, so match case-insensitively.
   const balloon = body.find(c =>
     (c.subcategory || '').toLowerCase() === 'balloon artist'
     && c.status === 'suggested'
@@ -170,11 +164,6 @@ async function test4ThreeRecommendations() {
 }
 
 async function test5ApproveAndScrub() {
-  // The smoke test should work regardless of whether the LLM enrichment job has
-  // run yet. The admin approve route only sets live_at when enrichment is
-  // 'processed' or 'reviewed' — so for a deterministic test, mark this
-  // provider's enrichment as processed before calling approve. This is a TEST
-  // FIXTURE, not a behaviour change.
   await pool.query(
     `UPDATE providers SET enrichment_status = 'processed' WHERE id = $1`,
     [ctx.provider_id]
@@ -229,7 +218,6 @@ async function test6PublicProfile() {
 
 async function cleanup() {
   if (!ctx.provider_id) {
-    // No provider was created — still try to clean up any stray "balloon artist" rows.
     try {
       await pool.query(
         `DELETE FROM service_categories_registry
@@ -245,9 +233,6 @@ async function cleanup() {
     [`DELETE FROM recommendations WHERE provider_id = $1`, [ctx.provider_id]],
     [`DELETE FROM service_categories_registry WHERE suggested_by_provider_id = $1`, [ctx.provider_id]],
     [`DELETE FROM providers WHERE id = $1`, [ctx.provider_id]],
-    // The "balloon artist" suggested category is created with no
-    // suggested_by_provider_id (resolveCategory doesn't set it on registration),
-    // so clean it explicitly. ON DELETE CASCADE on category_aliases removes the alias.
     [`DELETE FROM service_categories_registry WHERE lower(subcategory) = 'balloon artist' AND status = 'suggested'`, []],
   ];
 
@@ -278,13 +263,11 @@ async function main() {
   console.log('');
   await cleanup();
 
-  const passed = results.filter(r => r.ok).length;
-  const total = 6;
   console.log('');
-  console.log(`${passed}/${total} tests passed`);
+  console.log(`${results.filter(r => r.ok).length}/6 tests passed`);
 
   await pool.end();
-  process.exit(passed === total ? 0 : 1);
+  process.exit(results.every(r => r.ok) ? 0 : 1);
 }
 
 main().catch(async (err) => {

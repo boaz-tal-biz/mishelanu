@@ -1,33 +1,44 @@
-import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import pool from '../db/pool.js';
 
-const sessions = new Set();
+const JWT_SECRET = process.env.JWT_SECRET || 'mishelanu-dev-secret';
 
-export function loginAdmin(req, res) {
-  const { password } = req.body;
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Invalid password' });
-  }
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.add(token);
-  res.cookie('admin_session', token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
-  });
-  res.json({ ok: true });
+export function signToken(user) {
+  return jwt.sign(
+    { userId: user.id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
 }
 
-export function logoutAdmin(req, res) {
-  const token = req.cookies?.admin_session;
-  if (token) sessions.delete(token);
-  res.clearCookie('admin_session');
-  res.json({ ok: true });
+export function requireAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
 }
 
 export function requireAdmin(req, res, next) {
-  const token = req.cookies?.admin_session;
-  if (!token || !sessions.has(token)) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
+  requireAuth(req, res, () => {
+    if (req.user.role === 'monitor') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+  });
+}
+
+export function requireSuperAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Super admin access required' });
+    }
+    next();
+  });
 }

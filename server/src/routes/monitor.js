@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 import pool from '../db/pool.js';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -8,7 +8,7 @@ const router = Router();
 const anthropic = new Anthropic();
 
 // Parse a raw WhatsApp message using Claude
-router.post('/parse', requireAdmin, async (req, res, next) => {
+router.post('/parse', requireAuth, async (req, res, next) => {
   try {
     const { raw_message } = req.body;
     if (!raw_message) return res.status(400).json({ error: 'raw_message is required' });
@@ -48,7 +48,7 @@ Extract:
 });
 
 // Create a service request from parsed data
-router.post('/request', requireAdmin, async (req, res, next) => {
+router.post('/request', requireAuth, async (req, res, next) => {
   try {
     const { raw_message, requester_phone, parsed_service_needed, parsed_location, parsed_urgency, parsed_context } = req.body;
 
@@ -65,7 +65,7 @@ router.post('/request', requireAdmin, async (req, res, next) => {
 });
 
 // Search providers for matching
-router.get('/search', requireAdmin, async (req, res, next) => {
+router.get('/search', requireAuth, async (req, res, next) => {
   try {
     const { q } = req.query;
     if (!q) return res.status(400).json({ error: 'Search query (q) required' });
@@ -115,7 +115,7 @@ router.get('/search', requireAdmin, async (req, res, next) => {
 });
 
 // Send match: assign a provider to a service request
-router.post('/match', requireAdmin, async (req, res, next) => {
+router.post('/match', requireAuth, async (req, res, next) => {
   try {
     const { request_id, provider_id } = req.body;
     if (!request_id || !provider_id) {

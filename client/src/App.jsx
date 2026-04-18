@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext.jsx';
 import Header from './components/Header.jsx';
 import Home from './pages/Home.jsx';
 import Register from './pages/Register.jsx';
@@ -15,7 +16,7 @@ import ContactUs from './pages/ContactUs.jsx';
 
 export default function App() {
   return (
-    <>
+    <AuthProvider>
       <Header />
       <main style={{ padding: '1.5rem 0', minHeight: 'calc(100vh - 56px)' }}>
         <Routes>
@@ -33,6 +34,6 @@ export default function App() {
           <Route path="/contact" element={<ContactUs />} />
         </Routes>
       </main>
-    </>
+    </AuthProvider>
   );
 }
