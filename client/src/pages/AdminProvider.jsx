@@ -293,19 +293,49 @@ export default function AdminProvider() {
         <h3 className="section-heading">
           Community Recommendations ({provider.recommendations?.length || 0}/3)
         </h3>
-        {provider.recommendations?.map(rec => (
-          <div key={rec.id} style={{ padding: '0.875rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)', marginBottom: '0.5rem' }}>
-            <div className="flex items-center justify-between">
-              <strong style={{ fontSize: '0.875rem' }}>{rec.recommender_name}</strong>
-              <span className="badge badge-navy">{rec.relationship}</span>
+        {provider.recommendations_summary?.text && provider.recommendations.length > 0 && (
+          <p style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+            {provider.recommendations_summary.text}
+          </p>
+        )}
+        {provider.recommendations?.map(rec => {
+          const displayName = rec.recommender_first_name
+            ? `${rec.recommender_first_name}${rec.recommender_surname ? ' ' + rec.recommender_surname : ''}`
+            : (rec.recommender_name || 'Anonymous');
+          const relationshipLabel = REL_TYPE_LABEL[rec.relationship_type] || rec.relationship || 'Unknown';
+          const relationshipBadge = rec.relationship_type === 'hearsay' ? 'badge-gold' : 'badge-teal';
+          return (
+            <div key={rec.id} style={{ padding: '0.875rem', background: 'var(--gray-100)', borderRadius: 'var(--radius)', marginBottom: '0.5rem' }}>
+              <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: '0.375rem' }}>
+                <strong style={{ fontSize: '0.875rem' }}>{displayName}</strong>
+                <div className="flex gap-1" style={{ flexWrap: 'wrap' }}>
+                  <span className={`badge ${relationshipBadge}`}>{relationshipLabel}</span>
+                  {rec.details_scrubbed && (
+                    <span className="badge badge-navy" title="Recommender contact details have been scrubbed">Scrubbed</span>
+                  )}
+                  {(rec.opt_in_provider || rec.opt_in_user) && (
+                    <span className="badge badge-coral">Opt-in</span>
+                  )}
+                </div>
+              </div>
+              <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                {rec.service_description || rec.recommendation_text}
+              </p>
+              {(rec.how_long_known || rec.last_service_date) && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.375rem' }}>
+                  {rec.how_long_known && <>Known: {rec.how_long_known}</>}
+                  {rec.how_long_known && rec.last_service_date && <> · </>}
+                  {rec.last_service_date && <>Last service: {rec.last_service_date}</>}
+                </div>
+              )}
+              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.375rem' }}>
+                {new Date(rec.created_at).toLocaleDateString('en-GB')}
+                {!rec.details_scrubbed && rec.recommender_email && <> · {rec.recommender_email}</>}
+                {!rec.details_scrubbed && rec.recommender_phone && <> · {rec.recommender_phone}</>}
+              </div>
             </div>
-            <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>{rec.recommendation_text}</p>
-            <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.25rem' }}>
-              {new Date(rec.created_at).toLocaleDateString('en-GB')}
-              {rec.recommender_email && ` — ${rec.recommender_email}`}
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {(!provider.recommendations || provider.recommendations.length === 0) && (
           <div className="empty-state" style={{ padding: '1.5rem' }}>
             <p>Waiting for community recommendations.</p>
@@ -315,3 +345,10 @@ export default function AdminProvider() {
     </div>
   );
 }
+
+const REL_TYPE_LABEL = {
+  personal_work: 'Used their services',
+  personal_known: 'Knows them personally',
+  personal_both: 'Both — services and personal',
+  hearsay: 'Heard about them',
+};

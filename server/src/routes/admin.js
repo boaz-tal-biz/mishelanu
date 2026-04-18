@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { loginAdmin, logoutAdmin, requireAdmin } from '../middleware/auth.js';
 import pool from '../db/pool.js';
 import PDFDocument from 'pdfkit';
+import { scrubRecommenderDetails } from '../services/recommendations.js';
 
 const router = Router();
 
@@ -299,10 +300,44 @@ router.get('/providers/:id', requireAdmin, async (req, res, next) => {
     const provider = rows[0];
 
     const { rows: recs } = await pool.query(
-      `SELECT * FROM recommendations WHERE provider_id = $1 ORDER BY created_at`, [provider.id]
+      `SELECT id, recommender_name, recommender_first_name, recommender_surname,
+              recommender_email, recommender_phone,
+              relationship, relationship_type,
+              recommendation_text, service_description, how_long_known, last_service_date,
+              opt_in_provider, opt_in_user, details_scrubbed,
+              created_at
+         FROM recommendations
+        WHERE provider_id = $1
+        ORDER BY created_at`,
+      [provider.id]
     );
 
-    res.json({ ...provider, recommendations: recs });
+    const counts = recs.reduce((acc, r) => {
+      const t = r.relationship_type || 'unknown';
+      acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, {});
+    const personal = (counts.personal_work || 0) + (counts.personal_known || 0) + (counts.personal_both || 0);
+    const hearsay = counts.hearsay || 0;
+
+    const summaryParts = [];
+    if (personal > 0) summaryParts.push(`${personal} personal`);
+    if (hearsay > 0) summaryParts.push(`${hearsay} hearsay`);
+    const summary = recs.length === 0
+      ? 'No recommendations yet'
+      : `${recs.length} recommendation${recs.length === 1 ? '' : 's'} (${summaryParts.join(', ')})`;
+
+    res.json({
+      ...provider,
+      recommendations: recs,
+      recommendations_summary: {
+        total: recs.length,
+        by_type: counts,
+        personal,
+        hearsay,
+        text: summary,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -352,7 +387,9 @@ router.put('/providers/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
-// Admin approval (go-live gate)
+// Admin approval (go-live gate). Also irreversibly scrubs recommender contact
+// details for this provider — once approved, only first names + recommendation
+// content are kept.
 router.post('/providers/:id/approve', requireAdmin, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -369,7 +406,16 @@ router.post('/providers/:id/approve', requireAdmin, async (req, res, next) => {
       [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Provider not found' });
-    res.json(rows[0]);
+
+    let scrubbed = 0;
+    try {
+      scrubbed = await scrubRecommenderDetails(req.params.id, 'admin_approval');
+    } catch (scrubErr) {
+      // Don't fail the approval if scrub had an issue — surface it but keep going
+      console.error(`[approve] scrub failed for ${req.params.id}:`, scrubErr.message);
+    }
+
+    res.json({ ...rows[0], recommendations_scrubbed: scrubbed });
   } catch (err) {
     next(err);
   }

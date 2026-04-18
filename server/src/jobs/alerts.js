@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { scrubRecommenderDetails } from '../services/recommendations.js';
 
 export async function checkMissingRecommendations() {
   const { rows } = await pool.query(
@@ -92,7 +93,12 @@ export async function checkApplicationDeadlines() {
          VALUES ($1, 'application_expired', $2)`,
         [p.id, `${providerName}'s application has expired — all restarts exhausted.`]
       );
-      console.log(`Alert: application expired for ${providerName}`);
+      try {
+        const n = await scrubRecommenderDetails(p.id, 'application_expired');
+        console.log(`Alert: application expired for ${providerName} (${n} recommendation(s) scrubbed)`);
+      } catch (err) {
+        console.error(`[expire] scrub failed for ${p.id}:`, err.message);
+      }
     }
   }
 }

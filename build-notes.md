@@ -1,6 +1,53 @@
 # Mishelanu — Build Notes
 
-## ▶ Latest: Frontend tranche, overnight 2026-04-17 → 2026-04-18
+## ▶ Latest: Recommendation system redesign, 2026-04-18
+
+**Status:** built, smoke-tested locally, committed, pushed, **deploy in progress this turn**.
+**Spec:** "Mishelanu — Recommendation System Redesign" (in chat).
+
+### What shipped
+
+- **Migration 008** — extends `recommendations` with `recommender_first_name`, `recommender_surname`, `recommender_phone`, `relationship_type` (CHECK-constrained to `personal_work|personal_known|personal_both|hearsay`), `how_long_known`, `last_service_date`, `service_description`, `opt_in_provider`, `opt_in_user`, `details_scrubbed`. Backfills `first_name`/`surname` from old `recommender_name`, maps the legacy `relationship` enum into the new `relationship_type`, copies `recommendation_text` into `service_description`. Old columns retained (raw-data preservation). Adds `opt_in_interest` to `alert_type`. Creates `recommendation_scrub_log` with CHECK on `triggered_by` (`admin_approval | application_expired | manual`).
+- **Migration 009** — relaxes NOT NULL on `recommender_name` and `recommender_surname` so the scrub routine can null them per spec. API still enforces NOT NULL on new submissions.
+- **`scrubRecommenderDetails(providerId, triggeredBy)`** — new service in `server/src/services/recommendations.js`. Nulls `recommender_email`, `recommender_phone`, `recommender_surname`, plus the legacy `recommender_name` and (legacy) `recommender_email`; sets `details_scrubbed = true`; writes a `recommendation_scrub_log` row; logs to console. Idempotent on already-scrubbed rows.
+- **Auto-scrub triggers** — wired into `POST /api/admin/providers/:id/approve` (after admin_approved + live_at update) and into `checkApplicationDeadlines` job (when `application_expired` flips true). Both wrapped in try/catch so the parent operation succeeds even if scrub fails (logged).
+- **`POST /api/recommendations/:token` rewritten** — accepts the new fields, validates `relationship_type` against the whitelist, requires `service_description` only for personal experience types, fires an `opt_in_interest` admin alert (with full contact metadata) BEFORE any later scrub touches the row, still creates the `approval_ready` alert at the 3rd recommendation. Writes BOTH new and legacy columns so legacy admin views and exports keep working.
+- **`GET /api/recommendations/:token`** — now returns `provider_first_name` and `provider_surname` so the recommender page can address the provider personally.
+- **`GET /api/admin/providers/:id`** — selects the new recommendation columns and adds a `recommendations_summary` block with totals by relationship type plus a human-readable text ("3 recommendations (2 personal, 1 hearsay)").
+- **AdminProvider page** — recommendation list now shows the recommender's first name + surname (or "Anonymous" for legacy), a relationship badge, a "Scrubbed" badge when applicable, an "Opt-in" badge when the recommender opted in, the new `service_description` body, optional how-long-known and last-service-date lines, and contact details only when not yet scrubbed.
+- **Recommend page (`/recommend/:token`)** — full rewrite. Cream intro card with the spec's body copy (provider's first name interpolated). "Do you know them?" confirmation gate. Four-option relationship radio with selected-state highlighting. Required first/surname/email/phone block with the privacy notice in a teal-accent cream card. Conditional "tell us about your experience" section: how-long-known always visible; last-service-date only for `personal_work` / `personal_both`; service-description label/placeholder switches between "What service did they provide?" (personal_work / personal_both — required) and "What service did they provide?" (personal_known — optional) and "What have you heard about their work?" (hearsay — optional). Two opt-in checkboxes. Thank-you state with the threshold-reached banner if this was the 3rd recommendation.
+
+### Smoke tests run (local)
+
+- Migrations 008 + 009 applied cleanly.
+- End-to-end: register → 3 recommendations submitted (one each of `personal_work`, `hearsay`, `personal_known` + opt-in) → approval_ready alert fires at the 3rd → opt_in_interest alert created with full contact metadata → admin approve returns `recommendations_scrubbed: 3` → re-fetch shows `recommender_email`/`phone`/`surname`/legacy `recommender_name` all null and `details_scrubbed = true` → `recommendation_scrub_log` row exists with `triggered_by = admin_approval`.
+- Validation paths: missing/invalid `relationship_type` → 400; `personal_work` without `service_description` → 400; missing email/phone → 400; `hearsay` without `service_description` → 201.
+
+### Judgement calls
+
+14. **`recommender_email` and `recommender_phone` stay nullable in the DB schema** — spec calls them NOT NULL, but legacy rows have no phone (and possibly no email), and post-scrub rows must have null. Resolution: API enforces NOT NULL on new submissions; the schema stays permissive. The new validation is unambiguous because every new write goes through the route layer.
+15. **Old columns retained (raw-data preservation), populated alongside new ones** — `recommender_name` and `recommender_email` (legacy) are still written by every new submission and read by legacy code paths until they're explicitly removed. Scrub also nulls these so the post-approval state is uniformly contact-free.
+16. **Legacy `relationship` enum populated by mapping the new `relationship_type`** — `personal_work`/`personal_both` → `Client`, `personal_known` → `Friend/Family`, `hearsay` → `Community member`. Best-effort fit; means any old report querying the enum still gets a sensible value.
+17. **`service_description` required only for `personal_work` and `personal_both`** — spec text said "If `relationship_type` starts with 'personal_', require `service_description` to be non-empty" but the `personal_known` flow shows the field as optional ("show 'What service did they provide?' but not 'When did you last use their services?'"). Took the conservative read: require the field when the recommender claims to have personally received a service. For pure `personal_known` (knows them but didn't engage them), it's optional. Documented for review.
+18. **Migration 009 added separately rather than amending 008** — preserves migration history. 008 was already applied to my local DB by the time I noticed the NOT NULL constraint blocked the scrub. 009 is a one-line fix; safer than dropping and re-running 008.
+19. **`opt_in_interest` alert metadata snapshot** — captures recommender's name, email, phone, opt-in flags, and provider context at recommendation time. So even after the recommendation row is scrubbed, the alert still has everything admin needs to follow up.
+20. **Scrub does NOT delete `recommendation_scrub_log` rows** — they're audit. They survive provider deletion only via the `ON DELETE CASCADE` foreign key on `provider_id` (intentional: deleting the provider removes their entire footprint).
+21. **Admin approve still 200s if scrub fails** — wrapped in try/catch with console.error. Reasoning: the approval is the user-facing action; if scrub fails, an admin should still see the provider as approved and the failure should be visible in logs for follow-up. Not silently swallowed — errors print.
+
+### Files touched
+
+- `server/src/db/migrations/008_recommendation_redesign.sql` (new)
+- `server/src/db/migrations/009_relax_recommender_name_columns.sql` (new)
+- `server/src/services/recommendations.js` (new)
+- `server/src/routes/recommendations.js` (rewrite)
+- `server/src/routes/admin.js` (approve route + provider detail)
+- `server/src/jobs/alerts.js` (deadline expiry triggers scrub)
+- `client/src/pages/Recommend.jsx` (full rewrite)
+- `client/src/pages/AdminProvider.jsx` (new recommendation display)
+
+---
+
+## Earlier: Frontend tranche, overnight 2026-04-17 → 2026-04-18
 
 **Status:** built, smoke-tested locally, committed, pushed. **Deployed to VPS 2026-04-18 09:03 UTC.**
 **Commit:** `1fc0c27` on `main` (GitHub).
